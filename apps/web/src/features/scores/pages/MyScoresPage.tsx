@@ -6,8 +6,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { listScores, type Score } from "../apis/scores";
-import { ScoreCard } from "../components/ScoreCard";
+import { FileMusic, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { listScores, type Score } from "@/features/scores/apis/scores";
+import { ScoreCard } from "@/features/scores/components/ScoreCard";
 
 const POLL_MS = 2000;
 
@@ -40,26 +43,43 @@ export function MyScoresPage() {
   }, []);
 
   return (
-    <section>
-      <div className="page-head">
-        <h2>My scores</h2>
-        <Link to="/" className="button-link">
-          + New upload
-        </Link>
+    <section className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">My scores</h1>
+          <p className="text-sm text-muted-foreground">
+            Your uploads and their transcription status.
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link to="/">
+            <Plus />
+            New upload
+          </Link>
+        </Button>
       </div>
 
-      {!loaded && <p className="muted">Loading…</p>}
-      {loaded && scores.length === 0 && (
-        <p className="muted">
-          No uploads yet. <Link to="/">Upload your first score.</Link>
-        </p>
+      {!loaded && (
+        <p className="text-sm text-muted-foreground">Loading…</p>
       )}
 
-      <ul className="score-list">
+      {loaded && scores.length === 0 && (
+        <Card className="items-center gap-3 py-16 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <FileMusic className="size-6" />
+          </div>
+          <p className="text-sm font-medium">No uploads yet</p>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/">Upload your first score</Link>
+          </Button>
+        </Card>
+      )}
+
+      <div className="flex flex-col gap-3">
         {scores.map((s) => (
           <ScoreCard key={s.id} score={s} />
         ))}
-      </ul>
+      </div>
     </section>
   );
 }

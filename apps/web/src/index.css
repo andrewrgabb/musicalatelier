@@ -1,178 +1,96 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn/ui (new-york) neutral theme tokens. Light by default; .dark provided
+   for a future dark mode. Colors are oklch for smooth, consistent tones. */
 :root {
-  --bg: #0f1115;
-  --panel: #181b22;
-  --border: #2a2f3a;
-  --text: #e6e8ec;
-  --muted: #9aa3b2;
-  --accent: #6ea8fe;
-  --ok: #46c08a;
-  --warn: #e0b150;
-  --err: #e0625f;
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --success: oklch(0.62 0.17 152);
+  --warning: oklch(0.75 0.15 80);
 }
 
-* {
-  box-sizing: border-box;
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --success: oklch(0.7 0.16 152);
+  --warning: oklch(0.8 0.14 80);
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-button,
-.button-link {
-  background: var(--accent);
-  color: #0b0d11;
-  border: none;
-  border-radius: 8px;
-  padding: 0.5rem 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-block;
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.9rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
-}
-.brand {
-  font-weight: 700;
-}
-.app-header nav {
-  display: flex;
-  gap: 1rem;
-  flex: 1;
-}
-.app-header nav a {
-  color: var(--muted);
-}
-.app-header nav a.active {
-  color: var(--text);
-}
-.who {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.app-main {
-  max-width: 880px;
-  margin: 2rem auto;
-  padding: 0 1.5rem;
-}
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.25rem 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.muted {
-  color: var(--muted);
-}
-.error {
-  color: var(--err);
-}
-
-form {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  margin-top: 1rem;
-  flex-wrap: wrap;
-}
-
-.page-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.score-list {
-  list-style: none;
-  padding: 0;
-}
-.score-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-.score-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 0.9rem;
-}
-
-.status {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.badge {
-  border-radius: 999px;
-  padding: 0.15rem 0.7rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-.badge-queued {
-  background: #2a2f3a;
-  color: var(--muted);
-}
-.badge-processing {
-  background: rgba(110, 168, 254, 0.15);
-  color: var(--accent);
-}
-.badge-completed {
-  background: rgba(70, 192, 138, 0.15);
-  color: var(--ok);
-}
-.badge-failed {
-  background: rgba(224, 98, 95, 0.15);
-  color: var(--err);
-}
-
-.progress {
-  position: relative;
-  width: 140px;
-  height: 8px;
-  background: #2a2f3a;
-  border-radius: 999px;
-  overflow: hidden;
-}
-.progress-bar {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.4s ease;
-}
-.progress-pct {
-  position: absolute;
-  right: -2.4rem;
-  top: -0.4rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.preview {
-  margin-top: 1rem;
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 0.5rem;
-  overflow-x: auto;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
+  }
 }

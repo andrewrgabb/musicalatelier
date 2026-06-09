@@ -95,7 +95,12 @@ export function useCurrentUser(): AuthState {
 /** Gate a route: show a loader, then either the children or a redirect. */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useCurrentUser();
-  if (loading) return <div className="muted">Loading…</div>;
+  if (loading)
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
   if (!user) return <Navigate to="/sign-in" replace />;
   return <>{children}</>;
 }

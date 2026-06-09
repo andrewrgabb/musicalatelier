@@ -38,7 +38,16 @@ export function ScorePreview({ url }: { url: string }) {
   }, [url]);
 
   if (error) {
-    return <div className="muted">Couldn’t render preview: {error}</div>;
+    return (
+      <div className="text-sm text-muted-foreground">
+        Couldn’t render preview: {error}
+      </div>
+    );
   }
-  return <div className="preview" ref={containerRef} />;
+  return (
+    <div
+      className="overflow-x-auto rounded-lg border bg-white p-3"
+      ref={containerRef}
+    />
+  );
 }

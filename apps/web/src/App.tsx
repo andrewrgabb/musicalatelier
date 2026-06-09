@@ -1,10 +1,11 @@
 /** Routes for the SPA. Protected pages live under the AppLayout shell. */
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider, RequireAuth } from "./lib/auth";
-import { AppLayout } from "./features/layout/AppLayout";
-import { UploadPage } from "./features/scores/pages/UploadPage";
-import { MyScoresPage } from "./features/scores/pages/MyScoresPage";
-import { SignInPage } from "./features/auth/pages/SignInPage";
+import { AuthProvider, RequireAuth } from "@/lib/auth";
+import { AppLayout } from "@/features/layout/AppLayout";
+import { UploadPage } from "@/features/scores/pages/UploadPage";
+import { MyScoresPage } from "@/features/scores/pages/MyScoresPage";
+import { SignInPage } from "@/features/auth/pages/SignInPage";
+import { Toaster } from "@/components/ui/sonner";
 
 export function App() {
   return (
@@ -24,6 +25,7 @@ export function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Toaster position="top-center" />
       </AuthProvider>
     </BrowserRouter>
   );
