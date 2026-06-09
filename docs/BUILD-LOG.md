@@ -7,7 +7,7 @@ the next begins. This log tracks what's done and how to check it.
 |---|---|---|
 | 1 | Repo skeleton + docker compose (backing services, API `/healthz`, worker connects) | ✅ done |
 | 2 | Database — Prisma schema (`users`, `scores`) + first migration | ✅ done |
-| 3 | Auth adapter — `authenticate()` + dev stub, one protected route | — |
+| 3 | Auth adapter — `authenticate()` + dev stub, one protected route | ✅ done |
 | 4 | Storage — presigned upload/download against MinIO | — |
 | 5 | End-to-end flow with a **stub** transcription engine | — |
 | 6 | Real engine — swap in homr behind the same `transcribe()` adapter | — |
@@ -75,3 +75,33 @@ curl http://localhost:8080/healthz               # -> "db":true
 **Migration workflow reminder:** `db:migrate` (= `prisma migrate dev`) in
 development; `db:deploy` (= `prisma migrate deploy`) in prod/CI applies pending
 migrations only and never resets.
+
+---
+
+## Phase 3 — auth adapter ✅
+
+**Built (backend; the frontend half lands in Phase 7):**
+- `src/lib/auth/identity.ts` — the normalised, provider-agnostic `Identity`.
+- `src/lib/auth/verify.ts` — `authenticate(req)`: in `stub` mode returns a fixed
+  dev identity; in `clerk` mode verifies the Bearer JWT against the issuer's
+  JWKS with `jose`. The claim mapping (the only provider-specific code) is
+  isolated here.
+- `src/lib/auth/middleware.ts` — `requireAuth`: authenticate → upsert local user
+  → attach `req.user` / `req.auth`.
+- `src/features/users/db.ts` — `upsertUserByIdentity` (find-or-create by
+  `external_auth_id`).
+- `src/types/express.d.ts` — types for `req.user` / `req.auth`.
+- Protected demo route `GET /me`.
+
+**How to verify:**
+```bash
+# stub mode (default): returns the dev user, creates the users row
+curl http://localhost:8080/me
+# clerk mode: rejects an unauthenticated request
+AUTH_MODE=clerk CLERK_JWKS_URL=https://example/.well-known/jwks.json \
+  pnpm --filter @musical-atelier/api dev   # then: curl -i .../me -> HTTP 401
+```
+
+**Key property:** the rest of the app references `req.user.id` (our internal id)
+only — never the provider's id. Swapping providers changes config in
+`verify.ts`, not the schema or any feature code.

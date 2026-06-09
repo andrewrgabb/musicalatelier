@@ -60,6 +60,30 @@ pnpm --filter @musical-atelier/api db:studio      # GUI table browser
 pnpm --filter @musical-atelier/api db:generate    # regenerate the typed client
 ```
 
+## Auth (the swappable adapter)
+
+Auth is the most provider-specific part of any app, so we hide it behind a thin
+boundary. The rest of the codebase never imports Clerk's SDK — it depends only
+on a normalised `Identity` and on `req.user` (our local user row).
+
+- **`lib/auth/verify.ts`** — `authenticate(req)` returns an `Identity`. Two
+  modes via `AUTH_MODE`: `stub` (local dev, a fixed test user, no provider
+  needed) and `clerk` (verifies the Bearer JWT against the issuer's JWKS with
+  `jose`). The claim mapping is the only provider-specific code, and it lives
+  here — swap providers by changing config in this one file.
+- **`lib/auth/middleware.ts`** — `requireAuth`: verify → **upsert the local
+  `users` row** by `external_auth_id` → attach `req.user` + `req.auth`.
+- Protect any route by adding `requireAuth`; see `GET /me`.
+
+**Why a local `users` table on top of the provider?** The provider owns
+identity, but our domain tables need a stable owner reference. Everything
+foreign-keys to our internal `users.id`, never the provider's id — so the schema
+isn't coupled to Clerk's id format. On first login the adapter upserts by
+`external_auth_id`.
+
+Local dev defaults to `AUTH_MODE=stub`, so you can build and test everything
+without a Clerk account.
+
 ## Layout
 
 We use a **feature-based** structure — code is grouped by feature (a vertical
@@ -71,12 +95,17 @@ src/
 ├─ lib/                  # cross-cutting infra (shared by all features)
 │  ├─ env.ts             # loads + validates environment variables
 │  ├─ redis.ts           # the shared ioredis connection (+ health check)
-│  └─ prisma.ts          # the shared Prisma client (+ health check)
+│  ├─ prisma.ts          # the shared Prisma client (+ health check)
+│  └─ auth/              # the swappable auth adapter
+│     ├─ identity.ts     #   the normalised Identity shape
+│     ├─ verify.ts       #   authenticate() — stub | clerk (JWKS via jose)
+│     └─ middleware.ts   #   requireAuth — verify + upsert user + attach req.user
 ├─ prisma/
 │  ├─ schema.prisma      # the database blueprint (models + enums)
 │  └─ migrations/        # versioned SQL migrations (committed)
-└─ features/             # added in later phases:
-   └─ scores/            #   api/ (routes), service/ (logic), db/ (Prisma)
+└─ features/
+   ├─ users/             # db.ts: upsert local user by external_auth_id
+   └─ scores/            # (later) api/ (routes), service/ (logic), db/ (Prisma)
 ```
 
 ## Running it

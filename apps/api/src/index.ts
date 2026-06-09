@@ -13,6 +13,7 @@ import cors from "cors";
 import { env } from "./lib/env.js";
 import { redisHealthy } from "./lib/redis.js";
 import { dbHealthy } from "./lib/prisma.js";
+import { requireAuth } from "./lib/auth/middleware.js";
 
 const app = express();
 
@@ -33,6 +34,14 @@ app.get("/healthz", async (_req, res) => {
     checks: { redis, db },
     time: new Date().toISOString(),
   });
+});
+
+// A protected route demonstrating the auth adapter. requireAuth verifies the
+// request, upserts the local user, and attaches req.user. In stub mode (local
+// dev) any request "succeeds" as the fixed dev user; in clerk mode it needs a
+// valid Bearer token.
+app.get("/me", requireAuth, (req, res) => {
+  res.json({ user: req.user, auth: req.auth });
 });
 
 app.listen(env.port, () => {
