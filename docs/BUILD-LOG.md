@@ -10,7 +10,7 @@ the next begins. This log tracks what's done and how to check it.
 | 3 | Auth adapter — `authenticate()` + dev stub, one protected route | ✅ done |
 | 4 | Storage — presigned upload/download against MinIO | ✅ done |
 | 5 | End-to-end flow with a **stub** transcription engine | ✅ done |
-| 6 | Real engine — swap in homr behind the same `transcribe()` adapter | — |
+| 6 | Real engine — swap in homr behind the same `transcribe()` adapter | ✅ done |
 | 7 | Frontend SPA — upload, live status list, score preview | ✅ done |
 | 8 | Polish + deploy to Fly (Sydney) + Vercel | — |
 
@@ -188,3 +188,30 @@ pnpm --filter @musical-atelier/web build    # typecheck + production build
 ```
 Verified: typecheck + build pass; dev server serves; MinIO returns CORS headers
 for the browser's cross-origin upload/preview.
+
+---
+
+## Phase 6 — real engine (homr) ✅
+
+**Built:**
+- Split `transcribe/` into a dispatcher (`__init__.py`), `stub.py`, and
+  `homr_engine.py`, selectable via `TRANSCRIBE_ENGINE` (`homr` default | `stub`).
+- `homr_engine.py` runs homr's CLI as a subprocess and reads back the
+  `<input>.musicxml` it writes.
+- Pinned the worker to **Python 3.12** (homr 0.6.2 requires <3.13) and added
+  `homr>=0.6.2` (ONNX-based; no PyTorch).
+- Documented model-weight caching, the **AGPL-3.0** license, and the accuracy
+  caveat in the worker README.
+
+**How to verify:**
+```bash
+# direct adapter call on a real printed sample
+TRANSCRIBE_ENGINE=homr uv run python -c "from transcribe.homr_engine import transcribe; print(len(transcribe('sample.jpg')))"
+# or full pipeline: upload a sheet-music image in the UI with the worker on homr
+```
+Verified: produced ~106 KB of valid MusicXML from a real printed sample, both
+via the adapter directly and through the full worker pipeline
+(upload → enqueue → homr → completed → download).
+
+**Note:** first run downloads model weights (slow, needs network); cached after.
+Phase 8 pre-bakes them into the worker image.

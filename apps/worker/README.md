@@ -54,17 +54,46 @@ Files:
 
 ## The transcription engine is swappable
 
-The engine lives behind a `transcribe(input) -> MusicXML` boundary so you can
-change it without touching the rest of the worker:
+The engine lives behind a `transcribe(input_path) -> MusicXML` boundary
+(`transcribe/`), chosen at runtime by the `TRANSCRIBE_ENGINE` env var:
 
-- **homr** (default) — transformer-based, photo/handwriting-oriented. AGPL-3.0.
-- **oemer** — lighter, MIT-licensed, weaker, no handwriting.
-- **Audiveris** — mature, printed-focused, Java (called via subprocess).
-- **a vision LLM** — often the best shot at messy handwriting.
+| `TRANSCRIBE_ENGINE` | Module | Notes |
+|---|---|---|
+| `homr` (default) | `transcribe/homr_engine.py` | the shipped OMR engine — real transcription |
+| `stub` | `transcribe/stub.py` | fixed MusicXML; instant; no models/network |
 
-We build the whole pipeline with a **stub engine** first (Phase 5) that returns
-a fixed MusicXML, then swap in homr (Phase 6). This proves the architecture
-without fighting slow, finicky ML up front.
+Adding another engine (oemer — MIT, lighter; Audiveris — Java via subprocess; a
+vision LLM — best for messy handwriting) means adding one module and one line in
+`transcribe/__init__.py`. Nothing else in the worker changes.
+
+### homr (the shipped engine)
+
+- **What it is:** transformer-based OMR (Polyphonic-TrOMR + UNet segmentation),
+  ONNX-based (no PyTorch). Focuses on pitch/rhythm on the treble/bass clef;
+  omits dynamics, articulation, and double accidentals.
+- **How we call it:** homr exposes a CLI (`homr <image>`) that writes
+  `<image>.musicxml` beside the input. We invoke it as a subprocess and read the
+  result back — which also isolates its heavy/native work from the worker loop.
+- **Model weights:** downloaded from homr's GitHub releases on first run and
+  cached locally (so the first transcription takes minutes; later ones are
+  fast). In production we pre-bake the weights into the Docker image (Phase 8).
+- **License:** homr is **AGPL-3.0** — its network-use clause matters for a
+  hosted service. If that's a problem, switch to a permissive engine (oemer is
+  MIT) behind the same adapter.
+
+### Honest caveat
+
+Optical music recognition — especially of hand-written or low-quality images —
+is genuinely hard. Accuracy varies a lot and results often need post-editing.
+That's expected: the value of this template is the **end-to-end pipeline**
+(upload → queue → worker → live status → result), and the swappable adapter lets
+you plug in whatever performs best for your inputs.
+
+### Tip: iterate with the stub
+
+Set `TRANSCRIBE_ENGINE=stub` for fast pipeline work — no model download, instant
+results. We built the whole flow on the stub first (Phase 5), then swapped in
+homr (Phase 6) without changing anything outside `transcribe/`.
 
 ## Running it
 
