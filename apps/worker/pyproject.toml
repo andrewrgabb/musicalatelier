@@ -1,0 +1,19 @@
+[project]
+name = "musical-atelier-worker"
+version = "0.1.0"
+description = "Python worker — consumes the BullMQ transcription queue and runs the OMR engine."
+requires-python = ">=3.10"
+dependencies = [
+    # The Python port of BullMQ. Interoperable with the Node producer because
+    # both speak the same Redis Lua scripts on the same queue.
+    "bullmq>=2.0.0",
+    # Loads the repo-root .env in local dev (prod uses real env vars).
+    "python-dotenv>=1.0.0",
+]
+
+# homr (the real OMR engine) and the Postgres/S3 clients are added in later
+# phases (5/6) so Phase 1 stays a tiny, fast "does it connect?" check.
+
+[tool.uv]
+# uv manages an isolated virtualenv in apps/worker/.venv automatically.
+package = false

@@ -1,0 +1,7 @@
+# Defines which directories pnpm treats as workspace packages.
+# The Python worker lives in apps/worker but is intentionally NOT a pnpm
+# workspace — it builds with its own tooling (uv), outside the JS task graph.
+packages:
+  - "apps/web"
+  - "apps/api"
+  - "packages/*"

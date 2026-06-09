@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Environment (never commit real secrets — .env.example is the template)
+.env
+.env.local
+.env.*.local
+
+# Python / worker
+apps/worker/.venv/
+__pycache__/
+*.pyc
+.python-version
+
+# Prisma
+apps/api/prisma/migrations/.lock
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Local data volumes (if any are bind-mounted)
+.data/
+
+# homr model cache (downloaded at runtime; large)
+apps/worker/.cache/
