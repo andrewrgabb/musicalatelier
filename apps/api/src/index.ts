@@ -12,6 +12,7 @@ import express from "express";
 import cors from "cors";
 import { env } from "./lib/env.js";
 import { redisHealthy } from "./lib/redis.js";
+import { dbHealthy } from "./lib/prisma.js";
 
 const app = express();
 
@@ -25,11 +26,11 @@ app.get("/", (_req, res) => {
 
 // Liveness + dependency check. Fly's health check hits this.
 app.get("/healthz", async (_req, res) => {
-  const redis = await redisHealthy();
-  const ok = redis;
+  const [redis, db] = await Promise.all([redisHealthy(), dbHealthy()]);
+  const ok = redis && db;
   res.status(ok ? 200 : 503).json({
     ok,
-    checks: { redis },
+    checks: { redis, db },
     time: new Date().toISOString(),
   });
 });

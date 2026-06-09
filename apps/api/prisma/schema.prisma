@@ -1,0 +1,93 @@
+// Prisma schema — the database "blueprint" for Musical Atelier.
+//
+// Prisma is our ORM (Object-Relational Mapper): we describe tables here as
+// code, Prisma generates a type-safe TypeScript client to query them, and it
+// turns changes to this file into versioned SQL migrations committed to the
+// repo. The API (Node) is the SOLE owner of the schema + migrations.
+//
+// Two connection URLs (see the datasource block):
+//   url       -> used at RUNTIME. In prod this is the POOLED connection
+//                (PgBouncer, ?pgbouncer=true) so many requests share a small
+//                pool of real DB connections.
+//   directUrl -> used for MIGRATIONS only. Migrations need advisory locks that
+//                a connection pooler can't carry through, so they go direct.
+// Locally both point at the same plain Postgres container.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// A user of the app. Identity itself lives with the auth provider (Clerk);
+// this is our LOCAL record so the rest of the schema can foreign-key to a
+// stable internal id instead of the provider's id format.
+model User {
+  // Internal primary key — everything else references THIS, never the Clerk id.
+  id String @id @default(cuid())
+
+  // The auth provider's user id (e.g. Clerk's "user_..."). We upsert on this at
+  // first login. Swapping providers later changes only how this is populated.
+  externalAuthId String @unique @map("external_auth_id")
+
+  email String?
+
+  scores Score[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// What kind of file the user uploaded.
+enum SourceType {
+  image
+  pdf
+}
+
+// The lifecycle of a transcription. Mirrors the ScoreStatus type in
+// packages/contracts. The Postgres row is the user-facing source of truth;
+// BullMQ holds the in-flight job and the worker mirrors progress into here.
+enum ScoreStatus {
+  queued
+  processing
+  completed
+  failed
+}
+
+// One uploaded score and its transcription job.
+model Score {
+  id String @id @default(cuid())
+
+  // Owner — foreign key to our internal users.id (never the Clerk id).
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // R2/MinIO object key of the uploaded image/PDF.
+  sourceKey  String     @map("source_key")
+  sourceType SourceType @map("source_type")
+
+  // Lifecycle + progress, mirrored from the worker.
+  status   ScoreStatus @default(queued)
+  progress Int         @default(0) // 0–100
+
+  // R2/MinIO object key of the generated MusicXML (set on success).
+  outputKey String? @map("output_key")
+
+  // Failure message (set on failure).
+  error String?
+
+  // The BullMQ job id, so we can correlate the row with the queue.
+  jobId String? @map("job_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("scores")
+}

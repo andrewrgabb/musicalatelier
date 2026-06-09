@@ -33,6 +33,33 @@ A minimal server that proves connectivity:
 Later phases add the `/scores` routes, the auth adapter, presigned URLs, the
 BullMQ producer, and Bull Board.
 
+## Database (Prisma)
+
+The API is the **sole owner** of the database schema and migrations. The schema
+is described as code in [`prisma/schema.prisma`](./prisma/schema.prisma); Prisma
+generates a type-safe client from it and turns schema changes into versioned SQL
+migrations committed under `prisma/migrations/`.
+
+Two tables today:
+- **`users`** — our local record of a user. Identity lives with the auth
+  provider; this table holds an internal `id` (which everything else references)
+  plus `external_auth_id` (the provider's id, upserted on first login).
+- **`scores`** — one uploaded score and its transcription lifecycle
+  (`status`, `progress`, `source_key`, `output_key`, `job_id`, …).
+
+Two connection URLs (see [`.env.example`](../../.env.example)):
+- `DATABASE_URL` — used at **runtime** (pooled via PgBouncer in prod).
+- `DIRECT_URL` — used for **migrations** (direct; migrations need advisory locks
+  a pooler can't carry). Locally both point at the same Postgres container.
+
+Commands (run from the repo root or this folder):
+```bash
+pnpm --filter @musical-atelier/api db:migrate    # create + apply a migration (dev)
+pnpm --filter @musical-atelier/api db:deploy      # apply pending migrations (prod/CI)
+pnpm --filter @musical-atelier/api db:studio      # GUI table browser
+pnpm --filter @musical-atelier/api db:generate    # regenerate the typed client
+```
+
 ## Layout
 
 We use a **feature-based** structure — code is grouped by feature (a vertical
@@ -43,7 +70,11 @@ src/
 ├─ index.ts              # server entry: middleware + routes
 ├─ lib/                  # cross-cutting infra (shared by all features)
 │  ├─ env.ts             # loads + validates environment variables
-│  └─ redis.ts           # the shared ioredis connection (+ health check)
+│  ├─ redis.ts           # the shared ioredis connection (+ health check)
+│  └─ prisma.ts          # the shared Prisma client (+ health check)
+├─ prisma/
+│  ├─ schema.prisma      # the database blueprint (models + enums)
+│  └─ migrations/        # versioned SQL migrations (committed)
 └─ features/             # added in later phases:
    └─ scores/            #   api/ (routes), service/ (logic), db/ (Prisma)
 ```
