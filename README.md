@@ -146,9 +146,10 @@ Each of those folders has its own README explaining what it does and how.
 
 ## Getting started (local development)
 
-> **Status:** the project is being built up in phases. Right now (**Phase 1**)
-> you can bring up the backing services and run the API + worker as a
-> connectivity check. More features land each phase — see
+> **Status:** the full local demo works end-to-end (Phases 1–5, 7) against a
+> **stub** transcription engine — upload a file and watch it go
+> `queued → processing → completed` with an in-browser score preview. The real
+> homr engine (Phase 6) and cloud deploy (Phase 8) are still to come. See
 > [`docs/BUILD-LOG.md`](./docs/BUILD-LOG.md).
 
 ### Prerequisites
@@ -188,7 +189,7 @@ cd apps/worker && uv sync  # Python worker deps (creates apps/worker/.venv)
 cd ../..
 ```
 
-### 4. Run the API and the worker
+### 4. Run the API, the worker, and the website
 
 ```bash
 # Terminal A — the API
@@ -196,17 +197,28 @@ pnpm --filter @musical-atelier/api dev
 
 # Terminal B — the worker
 cd apps/worker && uv run python worker.py
+
+# Terminal C — the website
+pnpm --filter @musical-atelier/web dev
 ```
 
-### 5. Verify it's alive
+### 5. Try the demo
 
+Open the website at **http://localhost:5173** (you're auto-signed-in as a dev
+user in local stub mode). Upload any image or PDF, then watch "My scores" move
+through `queued → processing → completed` live, and click **Show preview** to
+see the transcribed MusicXML rendered in the browser. You can also watch the job
+flow through the queue at **http://localhost:8080/admin/queues** (Bull Board).
+
+> The local engine is a **stub** that returns a fixed sample score, so every
+> upload "transcribes" to the same thing — that's intentional: it proves the
+> whole pipeline. The real homr engine is Phase 6.
+
+Quick health check from the terminal:
 ```bash
 curl http://localhost:8080/healthz
-# -> {"ok":true,"checks":{"redis":true},...}
+# -> {"ok":true,"checks":{"redis":true,"db":true},...}
 ```
-
-The worker terminal should print `listening on queue 'transcription' — waiting
-for jobs`. That's Phase 1 done: every piece can talk to its dependencies.
 
 ### Handy commands
 

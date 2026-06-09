@@ -17,34 +17,51 @@ import {
   setScoreSourceKey,
 } from "./db.js";
 
-const EXT: Record<SourceType, string> = { image: "png", pdf: "pdf" };
-const CONTENT_TYPE: Record<SourceType, string> = {
-  image: "image/png",
-  pdf: "application/pdf",
+// Map a MIME type to a file extension. The browser tells us the real content
+// type of the file it's about to upload; we sign the presigned PUT with that
+// exact type (the signature requires the client to send a matching header).
+const EXT_BY_CONTENT_TYPE: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/webp": "webp",
+  "image/tiff": "tiff",
+  "application/pdf": "pdf",
 };
 
+function extFor(contentType: string, sourceType: SourceType): string {
+  return EXT_BY_CONTENT_TYPE[contentType] ?? (sourceType === "pdf" ? "pdf" : "png");
+}
+
 /** Storage key for a score's uploaded source file. */
-function sourceKeyFor(userId: string, scoreId: string, type: SourceType) {
-  return `uploads/${userId}/${scoreId}/source.${EXT[type]}`;
+function sourceKeyFor(userId: string, scoreId: string, ext: string) {
+  return `uploads/${userId}/${scoreId}/source.${ext}`;
 }
 
 /**
  * Step 1: create the score row and hand back a presigned URL the browser uses
  * to upload the file directly to storage. Nothing is queued yet.
+ *
+ * `contentType` is the file's real MIME type, supplied by the browser; we sign
+ * the URL with it so the browser's PUT (which must send the same Content-Type)
+ * matches the signature.
  */
 export async function createScoreWithUploadUrl(
   userId: string,
-  sourceType: SourceType
+  sourceType: SourceType,
+  contentType: string
 ): Promise<{ score: Score; uploadUrl: string }> {
+  const ext = extFor(contentType, sourceType);
+
   // Create first so we have the id to build a stable, collision-free key,
   // then set the final key derived from that id.
-  const tempKey = `uploads/${userId}/pending/${Date.now()}.${EXT[sourceType]}`;
+  const tempKey = `uploads/${userId}/pending/${Date.now()}.${ext}`;
   const created = await createScore({ userId, sourceKey: tempKey, sourceType });
 
-  const sourceKey = sourceKeyFor(userId, created.id, sourceType);
+  const sourceKey = sourceKeyFor(userId, created.id, ext);
   const score = await setScoreSourceKey(created.id, sourceKey);
 
-  const uploadUrl = await presignUpload(sourceKey, CONTENT_TYPE[sourceType]);
+  const uploadUrl = await presignUpload(sourceKey, contentType);
   return { score, uploadUrl };
 }
 

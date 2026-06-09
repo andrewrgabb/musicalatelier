@@ -144,6 +144,15 @@ src/
       └─ db.ts           #   Prisma queries (scoped to the user)
 ```
 
+## A note on `.js` imports in `.ts` files
+
+You'll see imports like `import { env } from "./lib/env.js"` even though the file
+is `env.ts`. That's **not** JavaScript — it's the TypeScript-on-Node-ESM
+convention: this service runs under Node's native ES modules, where import
+specifiers must carry the `.js` extension that the compiled output *will* have.
+TypeScript deliberately makes you write the runtime path. (The Vite frontend
+uses bundler resolution, so it omits extensions instead.)
+
 ## Running it
 
 From the repo root (backing services must be up — `pnpm infra:up`):

@@ -35,7 +35,34 @@ Screens never call the auth provider's SDK directly — they go through our own
 `useCurrentUser()` hook and `<RequireAuth>` component, so swapping auth
 providers later touches only `lib/`.
 
-## Status
+## Running it
 
-Not built yet — this lands in **Phase 7**. See
-[`docs/BUILD-LOG.md`](../../docs/BUILD-LOG.md).
+The API must be running (and backing services up). Then:
+
+```bash
+pnpm --filter @musical-atelier/web dev   # http://localhost:5173
+```
+
+Vite reads `VITE_*` variables from the **repo-root `.env`** (via `envDir`), so
+`VITE_API_URL` and (later) the Clerk publishable key come from the same single
+env file as the rest of the stack.
+
+## What's built (Phase 7)
+
+- **Upload** (`features/scores/pages/UploadPage`): pick an image/PDF →
+  `createScore` (presigned URL) → upload **directly to storage** → `markUploaded`
+  (enqueue) → redirect to the list.
+- **My scores** (`MyScoresPage`): polls the API every 2 s and shows each upload
+  with a **live status badge + progress bar**.
+- **Preview** (`ScorePreview`): renders the resulting MusicXML as engraved sheet
+  music with OpenSheetMusicDisplay. It's **lazy-loaded** (OSMD is ~1 MB) so it
+  only downloads when you open a preview.
+- **Auth boundary** (`lib/auth.tsx`): `useCurrentUser()` + `<RequireAuth>`. In
+  local stub mode you're auto-signed-in; the sign-in page is the single
+  provider-specific seam.
+
+## A note on imports
+
+Frontend imports are **extensionless** (`from "../apis/scores"`) — Vite resolves
+them. (The API, by contrast, runs on Node's native ESM and must use `.js`
+extensions even for `.ts` sources; that's a Node-ESM rule, not JavaScript.)

@@ -11,7 +11,7 @@ the next begins. This log tracks what's done and how to check it.
 | 4 | Storage — presigned upload/download against MinIO | ✅ done |
 | 5 | End-to-end flow with a **stub** transcription engine | ✅ done |
 | 6 | Real engine — swap in homr behind the same `transcribe()` adapter | — |
-| 7 | Frontend SPA — upload, live status list, score preview | — |
+| 7 | Frontend SPA — upload, live status list, score preview | ✅ done |
 | 8 | Polish + deploy to Fly (Sydney) + Vercel | — |
 
 ---
@@ -160,3 +160,31 @@ curl -L localhost:8080/admin/queues   # live queue dashboard (HTTP 200)
 **Engineering notes resolved here:** deduped `ioredis` via a pnpm override
 (BullMQ pinned a different minor); disabled `declaration` emit (TS2742
 portability errors — nothing here is consumed as a library).
+
+---
+
+## Phase 7 — frontend SPA ✅
+
+**Built** (`apps/web`, Vite + React + React Router, feature-based):
+- `lib/api.ts` — single fetch client (attaches a Bearer token when present).
+- `lib/auth.tsx` — `AuthProvider`, `useCurrentUser()`, `<RequireAuth>`; the
+  frontend mirror of the backend auth adapter. Stub mode = auto-signed-in.
+- `features/scores/` — upload flow (create → direct-to-storage upload →
+  enqueue), the live-polling "My scores" list, and a **lazy-loaded** OSMD
+  MusicXML preview.
+- `features/auth/` — the sign-in page (the one provider-specific seam).
+- `features/layout/AppLayout` — header + nav shell.
+
+**Decisions/notes:**
+- Frontend imports are extensionless (Vite); the API keeps `.js` (Node ESM).
+- The OSMD preview (~1 MB) is code-split into its own chunk via `React.lazy`.
+- The API now signs the upload URL with the **client-supplied content type** so
+  the browser's PUT matches the signature for any image type, not just PNG.
+
+**How to verify:**
+```bash
+pnpm --filter @musical-atelier/web dev      # http://localhost:5173
+pnpm --filter @musical-atelier/web build    # typecheck + production build
+```
+Verified: typecheck + build pass; dev server serves; MinIO returns CORS headers
+for the browser's cross-origin upload/preview.

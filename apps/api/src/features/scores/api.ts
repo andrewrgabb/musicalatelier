@@ -28,13 +28,19 @@ const VALID_SOURCE_TYPES: SourceType[] = ["image", "pdf"];
 scoresRouter.post("/", async (req, res, next) => {
   try {
     const sourceType = req.body?.sourceType as SourceType;
+    const contentType = req.body?.contentType as string | undefined;
     if (!VALID_SOURCE_TYPES.includes(sourceType)) {
       res.status(400).json({ error: "sourceType must be 'image' or 'pdf'" });
       return;
     }
+    if (!contentType || typeof contentType !== "string") {
+      res.status(400).json({ error: "contentType (the file's MIME type) is required" });
+      return;
+    }
     const { score, uploadUrl } = await createScoreWithUploadUrl(
       req.user!.id,
-      sourceType
+      sourceType,
+      contentType
     );
     res.status(201).json({ scoreId: score.id, uploadUrl });
   } catch (err) {
