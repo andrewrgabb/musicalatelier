@@ -36,18 +36,17 @@ languages because both speak the same Redis Lua scripts.
 7. Mirrors the lifecycle into the Postgres `scores` row
    (`queued → processing → completed | failed`).
 
-## What exists now (Phase 5)
+## What it does
 
-The full pipeline runs against a **stub** engine. On each job the worker:
-marks the score `processing`, downloads the source from storage
-(`storage.py`), reports staged progress (BullMQ events + the `scores` row via
-`db.py`), runs `transcribe()` (stub MusicXML), uploads the result, and marks the
-score `completed` — or `failed` on error. Phase 6 swaps the stub for homr behind
-the same `transcribe()` signature.
+On each job the worker: marks the score `processing`, downloads the source from
+storage (`storage.py`), reports staged progress (BullMQ events + the `scores`
+row via `db.py`), runs `transcribe()` (homr), uploads the resulting MusicXML,
+and marks the score `completed` — or `failed` on error.
 
 Files:
 - `worker.py` — the job processor + BullMQ worker loop.
-- `transcribe/__init__.py` — the swappable engine adapter (stub today).
+- `transcribe/__init__.py` — the engine adapter (re-exports the homr engine).
+- `transcribe/homr_engine.py` — runs homr and returns the MusicXML.
 - `storage.py` — boto3 S3 download/upload.
 - `db.py` — asyncpg writer mirroring status into the `scores` row.
 - `contract.py` — the Python mirror of the job contract.
@@ -55,15 +54,10 @@ Files:
 ## The transcription engine is swappable
 
 The engine lives behind a `transcribe(input_path) -> MusicXML` boundary
-(`transcribe/`), chosen at runtime by the `TRANSCRIBE_ENGINE` env var:
-
-| `TRANSCRIBE_ENGINE` | Module | Notes |
-|---|---|---|
-| `homr` (default) | `transcribe/homr_engine.py` | the shipped OMR engine — real transcription |
-| `stub` | `transcribe/stub.py` | fixed MusicXML; instant; no models/network |
-
-Adding another engine (oemer — MIT, lighter; Audiveris — Java via subprocess; a
-vision LLM — best for messy handwriting) means adding one module and one line in
+(`transcribe/`). The shipped engine is **homr**. To use a different engine
+(oemer — MIT, lighter; Audiveris — Java via subprocess; a vision LLM — best for
+messy handwriting) you add a sibling module with a matching
+`transcribe(input_path) -> str` and change the one import in
 `transcribe/__init__.py`. Nothing else in the worker changes.
 
 ### homr (the shipped engine)
@@ -88,12 +82,6 @@ is genuinely hard. Accuracy varies a lot and results often need post-editing.
 That's expected: the value of this template is the **end-to-end pipeline**
 (upload → queue → worker → live status → result), and the swappable adapter lets
 you plug in whatever performs best for your inputs.
-
-### Tip: iterate with the stub
-
-Set `TRANSCRIBE_ENGINE=stub` for fast pipeline work — no model download, instant
-results. We built the whole flow on the stub first (Phase 5), then swapped in
-homr (Phase 6) without changing anything outside `transcribe/`.
 
 ## Running it
 

@@ -59,8 +59,9 @@ async def process(job, job_token):
             input_path = tmp.name
 
         try:
-            # 2) simulate staged progress (the stub engine is instant; real work
-            #    will report finer-grained progress in Phase 6)
+            # 2) coarse staged progress. homr runs as one opaque step, so we
+            #    nudge the bar to 75% before it starts and 100% when it returns.
+            #    (A finer-grained engine could report real progress here.)
             for pct in (25, 50, 75):
                 await asyncio.sleep(1)
                 await job.updateProgress(pct)

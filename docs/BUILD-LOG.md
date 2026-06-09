@@ -222,3 +222,8 @@ via the adapter directly and through the full worker pipeline
 
 **Note:** first run downloads model weights (slow, needs network); cached after.
 Phase 8 pre-bakes them into the worker image.
+
+> **Later update:** the **stub** transcription engine (and `TRANSCRIBE_ENGINE`)
+> was **removed** — homr is now the only engine. `transcribe/__init__.py` simply
+> re-exports the homr engine; swapping engines means changing that one import.
+> (Phases 5–6 above used a stub first; that scaffolding is gone.)

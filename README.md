@@ -150,10 +150,10 @@ Each of those folders has its own README explaining what it does and how.
 
 ## Getting started (local development)
 
-> **Status:** the full local demo works end-to-end (Phases 1–5, 7) against a
-> **stub** transcription engine — upload a file and watch it go
-> `queued → processing → completed` with an in-browser score preview. The real
-> homr engine (Phase 6) and cloud deploy (Phase 8) are still to come. See
+> **Status:** the full demo works end-to-end locally — upload a sheet-music
+> image/PDF and watch it go `queued → processing → completed`, with the real
+> **homr** OMR engine producing the MusicXML and an in-browser score preview.
+> Cloud deploy (Phase 8) is in progress. See
 > [`docs/BUILD-LOG.md`](./docs/BUILD-LOG.md).
 
 ### Prerequisites
@@ -221,9 +221,9 @@ through `queued → processing → completed` live, and click **Show preview** t
 see the transcribed MusicXML rendered in the browser. You can also watch the job
 flow through the queue at **http://localhost:8080/admin/queues** (Bull Board).
 
-> The local engine is a **stub** that returns a fixed sample score, so every
-> upload "transcribes" to the same thing — that's intentional: it proves the
-> whole pipeline. The real homr engine is Phase 6.
+> The transcription uses **homr**. The first job downloads homr's model weights
+> (a few minutes, one time), then it's fast. OMR accuracy varies with image
+> quality — see the caveat in [`apps/worker/README.md`](./apps/worker/README.md).
 
 Quick health check from the terminal:
 ```bash

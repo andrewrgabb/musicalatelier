@@ -23,7 +23,7 @@ def _homr_executable() -> str:
     if not exe:
         raise RuntimeError(
             "homr CLI not found on PATH. Install it (uv sync) and run the worker "
-            "via `uv run`, or set TRANSCRIBE_ENGINE=stub."
+            "via `uv run` (or with the venv's bin on PATH)."
         )
     return exe
 
