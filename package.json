@@ -27,6 +27,9 @@
       "@prisma/engines",
       "prisma",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "ioredis": "5.11.1"
+    }
   }
 }

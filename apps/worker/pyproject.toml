@@ -9,10 +9,15 @@ dependencies = [
     "bullmq>=2.0.0",
     # Loads the repo-root .env in local dev (prod uses real env vars).
     "python-dotenv>=1.0.0",
+    # S3 client for downloading the source and uploading the MusicXML
+    # (points at MinIO locally, R2 in prod).
+    "boto3>=1.34.0",
+    # Async Postgres client — the worker mirrors job status into the scores row.
+    "asyncpg>=0.29.0",
 ]
 
-# homr (the real OMR engine) and the Postgres/S3 clients are added in later
-# phases (5/6) so Phase 1 stays a tiny, fast "does it connect?" check.
+# homr (the real OMR engine) is added in Phase 6. Phase 5 uses a stub engine so
+# we can prove the whole pipeline without the slow, heavy ML toolchain.
 
 [tool.uv]
 # uv manages an isolated virtualenv in apps/worker/.venv automatically.

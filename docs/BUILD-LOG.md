@@ -9,7 +9,7 @@ the next begins. This log tracks what's done and how to check it.
 | 2 | Database — Prisma schema (`users`, `scores`) + first migration | ✅ done |
 | 3 | Auth adapter — `authenticate()` + dev stub, one protected route | ✅ done |
 | 4 | Storage — presigned upload/download against MinIO | ✅ done |
-| 5 | End-to-end flow with a **stub** transcription engine | — |
+| 5 | End-to-end flow with a **stub** transcription engine | ✅ done |
 | 6 | Real engine — swap in homr behind the same `transcribe()` adapter | — |
 | 7 | Frontend SPA — upload, live status list, score preview | — |
 | 8 | Polish + deploy to Fly (Sydney) + Vercel | — |
@@ -125,3 +125,38 @@ pnpm --filter @musical-atelier/api verify:storage
 
 **Key property:** file bytes never pass through the API — the browser uploads
 and downloads directly to/from storage via short-lived presigned URLs.
+
+---
+
+## Phase 5 — end-to-end async flow (stub engine) ✅
+
+The centerpiece: the full job lifecycle across the language boundary.
+
+**Built (API / producer):**
+- `src/lib/queue.ts` — the BullMQ producer (`transcription` queue).
+- `src/features/scores/` — `db.ts`, `service.ts`, `api.ts`:
+  - `POST /scores` → create row + presigned upload URL.
+  - `POST /scores/:id/uploaded` → enqueue the job (with retries/backoff).
+  - `GET /scores` → list my scores.
+  - `GET /scores/:id` → status (+ presigned download URL when completed).
+- `src/lib/bullboard.ts` — Bull Board at `/admin/queues` (optional Basic auth).
+- Catch-all JSON error handler.
+
+**Built (worker / consumer):**
+- `transcribe/__init__.py` — the swappable engine adapter (STUB returns a fixed
+  MusicXML).
+- `storage.py` — boto3 S3 download/upload.
+- `db.py` — asyncpg writer that mirrors status into the `scores` row (option a).
+- `worker.py` — processes a job: processing → download → staged progress →
+  transcribe → upload → completed; on error → failed + re-raise.
+
+**How to verify (services up, API + worker running):**
+```bash
+# create -> upload -> enqueue -> poll status -> download (see the Phase 5 test)
+# observed: queued -> processing 25/50 -> completed; download returns MusicXML
+curl -L localhost:8080/admin/queues   # live queue dashboard (HTTP 200)
+```
+
+**Engineering notes resolved here:** deduped `ioredis` via a pnpm override
+(BullMQ pinned a different minor); disabled `declaration` emit (TS2742
+portability errors — nothing here is consumed as a library).

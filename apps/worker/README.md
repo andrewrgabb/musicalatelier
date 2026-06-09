@@ -36,11 +36,21 @@ languages because both speak the same Redis Lua scripts.
 7. Mirrors the lifecycle into the Postgres `scores` row
    (`queued → processing → completed | failed`).
 
-## What exists now (Phase 1)
+## What exists now (Phase 5)
 
-A tiny worker that connects to Redis, attaches to the `transcription` queue, and
-waits — proving the queue plumbing works before we add the slow ML. The
-processor is a no-op; the API doesn't produce jobs yet (that starts in Phase 5).
+The full pipeline runs against a **stub** engine. On each job the worker:
+marks the score `processing`, downloads the source from storage
+(`storage.py`), reports staged progress (BullMQ events + the `scores` row via
+`db.py`), runs `transcribe()` (stub MusicXML), uploads the result, and marks the
+score `completed` — or `failed` on error. Phase 6 swaps the stub for homr behind
+the same `transcribe()` signature.
+
+Files:
+- `worker.py` — the job processor + BullMQ worker loop.
+- `transcribe/__init__.py` — the swappable engine adapter (stub today).
+- `storage.py` — boto3 S3 download/upload.
+- `db.py` — asyncpg writer mirroring status into the `scores` row.
+- `contract.py` — the Python mirror of the job contract.
 
 ## The transcription engine is swappable
 

@@ -14,6 +14,12 @@ import { env } from "./lib/env.js";
 import { redisHealthy } from "./lib/redis.js";
 import { dbHealthy } from "./lib/prisma.js";
 import { requireAuth } from "./lib/auth/middleware.js";
+import { scoresRouter } from "./features/scores/api.js";
+import {
+  bullBoardBasePath,
+  bullBoardGuard,
+  bullBoardRouter,
+} from "./lib/bullboard.js";
 
 const app = express();
 
@@ -43,6 +49,25 @@ app.get("/healthz", async (_req, res) => {
 app.get("/me", requireAuth, (req, res) => {
   res.json({ user: req.user, auth: req.auth });
 });
+
+// The score lifecycle routes (create + presign, enqueue, list, status).
+app.use("/scores", scoresRouter);
+
+// Live queue dashboard (guarded by Basic auth when configured).
+app.use(bullBoardBasePath, bullBoardGuard, bullBoardRouter);
+
+// Catch-all JSON error handler so handlers can just `next(err)`.
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction
+  ) => {
+    console.error("[api] unhandled error:", err);
+    res.status(500).json({ error: "internal server error" });
+  }
+);
 
 app.listen(env.port, () => {
   console.log(`[api] listening on http://localhost:${env.port}`);

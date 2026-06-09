@@ -23,15 +23,29 @@ those hops are ~1–2 ms. The browser reaches it at `api.<your-domain>`.
 - **Serve job/score status** so the website can show live progress.
 - **Host Bull Board** at `/admin/queues` — a live dashboard of the queue.
 
-## What exists now (Phase 1)
+## HTTP endpoints
 
-A minimal server that proves connectivity:
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /` | — | friendly JSON hello |
+| `GET /healthz` | — | liveness + Redis & DB checks (Fly health check) |
+| `GET /me` | ✓ | the current user (demonstrates the auth adapter) |
+| `POST /scores` | ✓ | create a score row + return a presigned upload URL |
+| `POST /scores/:id/uploaded` | ✓ | file uploaded → enqueue the transcription job |
+| `GET /scores` | ✓ | list my scores + status |
+| `GET /scores/:id` | ✓ | one score's status (+ presigned download when done) |
+| `/admin/queues` | Basic* | Bull Board — live queue dashboard |
 
-- `GET /` — a friendly JSON hello.
-- `GET /healthz` — liveness + a Redis ping (Fly's health check target).
+\* Bull Board is guarded by HTTP Basic auth only when `BULLBOARD_USER` /
+`BULLBOARD_PASS` are set (open locally; set them in prod).
 
-Later phases add the `/scores` routes, the auth adapter, presigned URLs, the
-BullMQ producer, and Bull Board.
+## Queue & background jobs (the producer)
+
+The API is the **producer**: `POST /scores/:id/uploaded` adds a `transcribe` job
+to the BullMQ `transcription` queue (`lib/queue.ts`) and returns `202` instantly.
+The Python worker (a separate app) is the consumer. They cooperate only through
+the queue, using the shared [job contract](../../packages/contracts). Jobs are
+configured with retries + exponential backoff.
 
 ## Database (Prisma)
 
@@ -113,6 +127,8 @@ src/
 │  ├─ redis.ts           # the shared ioredis connection (+ health check)
 │  ├─ prisma.ts          # the shared Prisma client (+ health check)
 │  ├─ storage.ts         # S3 client + presignUpload/presignDownload
+│  ├─ queue.ts           # the BullMQ producer (transcription queue)
+│  ├─ bullboard.ts       # Bull Board dashboard router (+ Basic-auth guard)
 │  └─ auth/              # the swappable auth adapter
 │     ├─ identity.ts     #   the normalised Identity shape
 │     ├─ verify.ts       #   authenticate() — stub | clerk (JWKS via jose)
@@ -122,7 +138,10 @@ src/
 │  └─ migrations/        # versioned SQL migrations (committed)
 └─ features/
    ├─ users/             # db.ts: upsert local user by external_auth_id
-   └─ scores/            # (later) api/ (routes), service/ (logic), db/ (Prisma)
+   └─ scores/            # the upload -> transcription lifecycle
+      ├─ api.ts          #   route handlers (thin)
+      ├─ service.ts      #   business logic (presign, enqueue, status)
+      └─ db.ts           #   Prisma queries (scoped to the user)
 ```
 
 ## Running it
