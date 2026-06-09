@@ -12,7 +12,7 @@ the next begins. This log tracks what's done and how to check it.
 | 5 | End-to-end flow with a **stub** transcription engine | ✅ done |
 | 6 | Real engine — swap in homr behind the same `transcribe()` adapter | ✅ done |
 | 7 | Frontend SPA — upload, live status list, score preview | ✅ done |
-| 8 | Polish + deploy to Fly (Sydney) + Vercel | 🔧 artifacts ready, provisioning next |
+| 8 | Polish + deploy to Fly (Sydney) + Vercel | ✅ deployed (live) |
 
 ---
 
@@ -249,6 +249,26 @@ Phase 8 pre-bakes them into the worker image.
 (copies the whole workspace incl. dev deps — a multi-stage prod prune would slim
 it; kept simple here).
 
-**Remaining (Half 2, interactive — see `docs/DEPLOY.md`):** provision R2, Fly
-apps + Managed Postgres + Redis (`syd`), set secrets, deploy; Clerk production
-instance; Vercel; DNS for `<domain>` / `api.<domain>`.
+**Deployed (Half 2) — live on `musicalatelier.com`:**
+- Fly `syd`: `musicalatelier-api` (https://api.musicalatelier.com, Let's Encrypt
+  cert) + `musicalatelier-worker` (homr, baked models) + Managed Postgres
+  (Basic, $38/mo) + Upstash Redis (Fixed 250MB, $10/mo).
+- Cloudflare R2 bucket `musical-atelier` + S3 token + CORS for the site origin.
+- Vercel: SPA at `www.musicalatelier.com` (apex redirects to www).
+- Clerk: **development** instance (works on the live domain; a production
+  instance is the documented next step for a real launch).
+
+**Gotchas worth remembering (template lessons):**
+- MPG exposes only the **pooler** host (`pgbouncer.<id>.flympg.net`); there's no
+  separate `<id>` direct host. Its pooler is session-mode, so use the pooler URL
+  for BOTH `DATABASE_URL` (with `?pgbouncer=true`) and `DIRECT_URL` (no flag) —
+  `prisma migrate deploy` works over it.
+- Route 53 had **two hosted zones** for the domain; records must go in the one
+  whose NS match the registered domain.
+- Vercel made **www** canonical (apex → www redirect), so the API now accepts a
+  comma-separated `APP_ORIGIN` (apex + www) and R2 CORS allows both.
+- Vercel build-time env vars (`VITE_*`) must be set **before** the build; a
+  monorepo CLI deploy runs from the **repo root** with root directory `apps/web`.
+
+**Optional follow-ups:** Clerk production instance; slim the API image (multi-stage
+prod prune); `fly scale count 0 -a musicalatelier-worker` between demos to save cost.

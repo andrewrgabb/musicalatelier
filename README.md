@@ -150,11 +150,13 @@ Each of those folders has its own README explaining what it does and how.
 
 ## Getting started (local development)
 
-> **Status:** the full demo works end-to-end locally — upload a sheet-music
-> image/PDF and watch it go `queued → processing → completed`, with the real
-> **homr** OMR engine producing the MusicXML and an in-browser score preview.
-> Cloud deploy (Phase 8) is in progress. See
-> [`docs/BUILD-LOG.md`](./docs/BUILD-LOG.md).
+> **Status:** complete and **deployed live**. Locally it's `docker compose up` +
+> the dev servers; in production it runs on Fly (Sydney) + Vercel + R2 + Clerk.
+> Upload a sheet-music image/PDF and watch it go `queued → processing →
+> completed`, with the real **homr** OMR engine producing the MusicXML and an
+> in-browser score preview. See [`docs/BUILD-LOG.md`](./docs/BUILD-LOG.md) for
+> the phase-by-phase story and [`docs/DEPLOY.md`](./docs/DEPLOY.md) to deploy
+> your own.
 
 ### Prerequisites
 
