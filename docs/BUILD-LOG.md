@@ -12,7 +12,7 @@ the next begins. This log tracks what's done and how to check it.
 | 5 | End-to-end flow with a **stub** transcription engine | ✅ done |
 | 6 | Real engine — swap in homr behind the same `transcribe()` adapter | ✅ done |
 | 7 | Frontend SPA — upload, live status list, score preview | ✅ done |
-| 8 | Polish + deploy to Fly (Sydney) + Vercel | — |
+| 8 | Polish + deploy to Fly (Sydney) + Vercel | 🔧 artifacts ready, provisioning next |
 
 ---
 
@@ -227,3 +227,28 @@ Phase 8 pre-bakes them into the worker image.
 > was **removed** — homr is now the only engine. `transcribe/__init__.py` simply
 > re-exports the homr engine; swapping engines means changing that one import.
 > (Phases 5–6 above used a stub first; that scaffolding is gone.)
+
+---
+
+## Phase 8 — polish + deploy 🔧
+
+**Artifacts built and locally verified (Half 1):**
+- `apps/api/Dockerfile` — bundles the API with **tsup** (inlines the `contracts`
+  workspace pkg so Node can run it); fresh in-image install so Prisma's engine is
+  a Linux binary. Verified: image runs, `/healthz` green in-container.
+- `apps/worker/Dockerfile` — Python 3.12 + uv + homr, with **model weights baked
+  in** (a warm-up run during build downloads + caches them; also proves homr
+  inference works on Linux). Verified: image runs, connects to the queue.
+- `apps/api/fly.toml`, `apps/worker/fly.toml` (region `syd`), `apps/web/vercel.json`,
+  root `.dockerignore` (excludes `node_modules`/`.venv`/`.env`).
+- Robust `.env` loading (walk up from cwd) in both `apps/api/src/lib/env.ts` and
+  `apps/worker/worker.py`, so the source, the bundle, and the container all work.
+- `docs/DEPLOY.md` — the full provisioning + deploy runbook.
+
+**Image sizes:** worker ~2 GB (onnxruntime + opencv + models), API ~1.5 GB
+(copies the whole workspace incl. dev deps — a multi-stage prod prune would slim
+it; kept simple here).
+
+**Remaining (Half 2, interactive — see `docs/DEPLOY.md`):** provision R2, Fly
+apps + Managed Postgres + Redis (`syd`), set secrets, deploy; Clerk production
+instance; Vercel; DNS for `<domain>` / `api.<domain>`.

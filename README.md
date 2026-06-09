@@ -267,3 +267,4 @@ steps 1–3 above — `.env`, `pnpm install`, `uv sync` — still need doing onc
 - [`apps/web/README.md`](./apps/web/README.md) — the website
 - [`packages/contracts/README.md`](./packages/contracts/README.md) — the job contract
 - [`docs/BUILD-LOG.md`](./docs/BUILD-LOG.md) — what's built so far, phase by phase
+- [`docs/DEPLOY.md`](./docs/DEPLOY.md) — production deployment runbook (Fly + R2 + Clerk + Vercel)

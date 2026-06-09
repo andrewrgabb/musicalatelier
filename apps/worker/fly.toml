@@ -1,0 +1,23 @@
+# Fly.io config for the worker. App name must be globally unique — change if taken.
+#
+# Deploy from the repo root:
+#   fly deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile .
+#
+# The worker has NO public service — it consumes the queue and talks to backing
+# services over Fly's private network. It runs continuously (it polls Redis), so
+# there's no auto-stop. homr needs real memory, hence the 2 GB VM.
+
+app = "musicalatelier-worker"
+primary_region = "syd"
+
+[build]
+
+# Non-secret config. Secrets (REDIS_URL, DATABASE_URL/DIRECT_URL, R2_*) are set
+# with `fly secrets set` — see DEPLOY.md.
+[env]
+  HOMR_TIMEOUT_SECONDS = "600"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "2048mb"

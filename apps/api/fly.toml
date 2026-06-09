@@ -1,0 +1,38 @@
+# Fly.io config for the API. App name must be globally unique — change it if
+# taken (and update DNS / APP_ORIGIN accordingly).
+#
+# Deploy from the repo root:
+#   fly deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile .
+
+app = "musicalatelier-api"
+primary_region = "syd"
+
+[build]
+
+# Apply pending Prisma migrations before each release goes live.
+[deploy]
+  release_command = "pnpm exec prisma migrate deploy"
+
+# Non-secret config. Secrets (REDIS_URL, DATABASE_URL, DIRECT_URL, R2_*,
+# CLERK_*, APP_ORIGIN) are set with `fly secrets set` — see DEPLOY.md.
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"

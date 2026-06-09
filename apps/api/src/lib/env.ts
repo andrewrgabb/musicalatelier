@@ -10,14 +10,28 @@
  * other module sees a populated process.env. Other lib modules import `env`
  * from here, which guarantees this runs first.
  */
+import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-// src/lib -> src -> api -> apps -> repo root
-const repoRoot = path.resolve(here, "../../../..");
-dotenv.config({ path: path.join(repoRoot, ".env") });
+// Find the nearest .env by walking up from the working directory. This works
+// the same whether we run the TypeScript source (tsx, cwd = apps/api) or the
+// bundled build, and in production (Fly) there's simply no .env file — the
+// values come from real environment variables / secrets — so it's a no-op.
+function findEnvFile(start: string): string | null {
+  let dir = start;
+  for (let i = 0; i < 6; i++) {
+    const candidate = path.join(dir, ".env");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+const envPath = findEnvFile(process.cwd());
+if (envPath) dotenv.config({ path: envPath });
 
 function required(name: string): string {
   const value = process.env[name];

@@ -18,11 +18,12 @@ import signal
 import tempfile
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
-# Load the repo-root .env in local dev BEFORE importing modules that read env.
-REPO_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(REPO_ROOT / ".env")
+# Load the nearest .env (walking up from the working directory) BEFORE importing
+# modules that read env. In local dev this finds the repo-root .env; in the
+# container there's no .env and Fly injects real env vars, so this is a no-op.
+load_dotenv(find_dotenv(usecwd=True))
 
 from contract import TRANSCRIPTION_QUEUE  # noqa: E402
 import db  # noqa: E402
