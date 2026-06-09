@@ -35,3 +35,4 @@ apps/api/prisma/migrations/.lock
 
 # homr model cache (downloaded at runtime; large)
 apps/worker/.cache/
+.vercel
