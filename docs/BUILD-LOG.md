@@ -255,8 +255,10 @@ it; kept simple here).
   (Basic, $38/mo) + Upstash Redis (Fixed 250MB, $10/mo).
 - Cloudflare R2 bucket `musical-atelier` + S3 token + CORS for the site origin.
 - Vercel: SPA at `www.musicalatelier.com` (apex redirects to www).
-- Clerk: **development** instance (works on the live domain; a production
-  instance is the documented next step for a real launch).
+- Clerk: **production** instance on `clerk.musicalatelier.com` (5 CNAMEs in
+  Route 53 → `*.clerk.services`, own Google OAuth, `pk_live_…` key). The API's
+  `CLERK_ISSUER`/`CLERK_JWKS_URL` and Vercel's `VITE_CLERK_PUBLISHABLE_KEY` were
+  swapped dev→prod together. (The dev instance stays for local development.)
 
 **Gotchas worth remembering (template lessons):**
 - MPG exposes only the **pooler** host (`pgbouncer.<id>.flympg.net`); there's no
