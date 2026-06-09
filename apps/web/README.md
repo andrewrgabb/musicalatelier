@@ -57,9 +57,14 @@ env file as the rest of the stack.
 - **Preview** (`ScorePreview`): renders the resulting MusicXML as engraved sheet
   music with OpenSheetMusicDisplay. It's **lazy-loaded** (OSMD is ~1 MB) so it
   only downloads when you open a preview.
-- **Auth boundary** (`lib/auth.tsx`): `useCurrentUser()` + `<RequireAuth>`. In
-  local stub mode you're auto-signed-in; the sign-in page is the single
-  provider-specific seam.
+- **Auth boundary** (`lib/auth.tsx`): `useCurrentUser()` + `<RequireAuth>`,
+  with two modes chosen by whether `VITE_CLERK_PUBLISHABLE_KEY` is set:
+  - **stub** (no key): auto-signed-in as the dev user — no login.
+  - **clerk** (key set): wraps the app in `<ClerkProvider>`, renders Clerk's
+    `<SignIn>` on the sign-in page, attaches the Clerk session JWT to every API
+    call (`setTokenGetter`), and shows a `<UserButton>` in the header.
+  Either way, feature screens only use `useCurrentUser()`/`<RequireAuth>` — the
+  Clerk-specific code is confined to `lib/auth.tsx` and `SignInPage`.
 
 ## A note on imports
 
