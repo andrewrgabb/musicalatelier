@@ -65,6 +65,19 @@ env file as the rest of the stack.
   swapping providers touches just those two files. Requires
   `VITE_CLERK_PUBLISHABLE_KEY`.
 
+## Styling
+
+Clean, light, Apple-ish: **Tailwind CSS v4** (`@tailwindcss/postcss`) +
+**shadcn/ui** (new-york style, neutral palette) on **Radix** primitives, with
+**Lucide** icons and **Sonner** toasts. Theme tokens live in `src/index.css`
+(light by default; dark CSS variables are already defined under `.dark`).
+Reusable primitives are in `src/components/ui/` (`button`, `card`, `badge`,
+`progress`, `sonner`); the `cn()` helper (clsx + tailwind-merge) is in
+`src/lib/utils.ts`. Imports use the `@/` path alias → `src/`.
+
+Add more shadcn components with `pnpm dlx shadcn@latest add <name>` (configured
+via `components.json`).
+
 ## A note on imports
 
 Frontend imports are **extensionless** (`from "../apis/scores"`) — Vite resolves
