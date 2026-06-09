@@ -5,8 +5,7 @@ demonstrates how a modern, production-shaped app fits together — frontend,
 API, database, background jobs, file storage, and authentication — using the
 standard, widely-recognised technology for each layer.
 
-> **The example use case:** upload a photo or PDF of sheet music (even
-> hand-written), and the app transcribes it into **MusicXML** — a file you can
+> **The example use case:** upload a photo or PDF of sheet music, and the app transcribes it into **MusicXML** — a file you can
 > open in music-notation software like MuseScore. The transcription is slow and
 > CPU-heavy, which is exactly why it's a great demo: it shows how real apps push
 > slow work into the **background** instead of making you wait.
