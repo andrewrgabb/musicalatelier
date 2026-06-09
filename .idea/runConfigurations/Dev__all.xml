@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Dev: all" type="CompoundRunConfigurationType">
+    <toRun name="Infra: up" type="js.build_tools.npm" />
+    <toRun name="API" type="js.build_tools.npm" />
+    <toRun name="Worker" type="ShConfigurationType" />
+    <toRun name="Web" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

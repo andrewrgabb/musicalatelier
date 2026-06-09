@@ -25,7 +25,10 @@ apps/api/prisma/migrations/.lock
 # Editor / OS
 .DS_Store
 .vscode/
-.idea/
+# Ignore JetBrains project files EXCEPT the shared run configurations, which we
+# commit so everyone gets one-click "run the stack" buttons.
+.idea/*
+!.idea/runConfigurations/
 
 # Local data volumes (if any are bind-mounted)
 .data/

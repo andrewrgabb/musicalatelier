@@ -229,6 +229,24 @@ pnpm infra:reset     # stop them AND wipe all local data volumes
 pnpm infra:logs      # tail the backing-service logs
 ```
 
+### Running in WebStorm / JetBrains
+
+The repo ships shared run configurations (committed under
+`.idea/runConfigurations/`), so opening the project in WebStorm gives you
+ready-made buttons in the Run menu:
+
+- **Dev: all** — one click starts the whole stack (a compound of Infra, API,
+  Worker, Web).
+- **API**, **Web**, **Worker** — run a single service. `Web` launches the SPA
+  with the JS debugger attached; `API`/`Web` are npm configs, `Worker` runs
+  `uv run python worker.py`.
+- **Infra: up** / **Infra: down**, **DB: migrate**, **DB: studio** — the
+  `infra:*` and `db:*` package scripts.
+
+The JS configs use the project Node interpreter; the Worker runs in the
+integrated terminal so it picks up `uv` from your shell. (First-time setup
+steps 1–3 above — `.env`, `pnpm install`, `uv sync` — still need doing once.)
+
 ---
 
 ## Where to read next
