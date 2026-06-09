@@ -72,5 +72,5 @@ app.use(
 app.listen(env.port, () => {
   console.log(`[api] listening on http://localhost:${env.port}`);
   console.log(`[api] CORS origin allowed: ${env.appOrigin}`);
-  console.log(`[api] auth mode: ${env.auth.mode}`);
+  console.log(`[api] auth issuer: ${env.auth.issuer}`);
 });

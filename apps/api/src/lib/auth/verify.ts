@@ -2,16 +2,11 @@
  * Provider-agnostic token verification — the single file that knows anything
  * about the auth provider. Everything else depends only on `Identity`.
  *
- * Two modes, controlled by AUTH_MODE:
- *   stub  -> local dev. No real token needed; returns a fixed test identity so
- *            you can build features without a live auth provider.
- *   clerk -> verifies a real JWT against the issuer's JWKS endpoint with `jose`.
- *            "clerk" is just the configured issuer — the verification itself is
- *            generic, so pointing CLERK_ISSUER/CLERK_JWKS_URL at WorkOS, Auth0,
- *            etc. would work the same way.
- *
- * To swap providers you change config (issuer, JWKS URL, claim mapping) HERE,
- * and nothing else.
+ * We verify the request's Bearer JWT against the issuer's JWKS endpoint with
+ * `jose`. The verification is generic OIDC — "Clerk" is just the configured
+ * issuer — so pointing CLERK_ISSUER / CLERK_JWKS_URL at WorkOS, Auth0, etc.
+ * would work the same way. To swap providers you change config (issuer, JWKS
+ * URL, claim mapping) HERE, and nothing else.
  */
 import type { Request } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -26,20 +21,10 @@ export class AuthError extends Error {
   }
 }
 
-// A fixed identity used in stub mode. Stable id so the same dev user is
-// upserted every time and owns the data you create locally.
-const STUB_IDENTITY: Identity = {
-  externalAuthId: "dev_user_local",
-  email: "dev@musical-atelier.local",
-};
-
 // Lazily-created JWKS fetcher (caches keys, refreshes as needed).
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 function getJwks() {
   if (!jwks) {
-    if (!env.auth.jwksUrl) {
-      throw new Error("AUTH_MODE=clerk but CLERK_JWKS_URL is not set");
-    }
     jwks = createRemoteJWKSet(new URL(env.auth.jwksUrl));
   }
   return jwks;
@@ -59,15 +44,10 @@ function bearerToken(req: Request): string {
  * Throws AuthError if the request is not authenticated.
  */
 export async function authenticate(req: Request): Promise<Identity> {
-  if (env.auth.mode === "stub") {
-    return STUB_IDENTITY;
-  }
-
-  // --- clerk (generic JWKS verification) ---
   const token = bearerToken(req);
   try {
     const { payload } = await jwtVerify(token, getJwks(), {
-      issuer: env.auth.issuer || undefined,
+      issuer: env.auth.issuer,
     });
 
     // --- claim mapping (the provider-specific bit, isolated here) ---

@@ -106,6 +106,13 @@ AUTH_MODE=clerk CLERK_JWKS_URL=https://example/.well-known/jwks.json \
 only — never the provider's id. Swapping providers changes config in
 `verify.ts`, not the schema or any feature code.
 
+> **Later update:** the `stub` auth mode (and `AUTH_MODE`) was **removed** —
+> Clerk is now required in every environment, including local dev (you point at
+> a free Clerk development instance). This dropped the dual code paths in both
+> `verify.ts` and the frontend `lib/auth.tsx`. Real Clerk auth is wired end to
+> end (frontend `<ClerkProvider>`/`<SignIn>`/`<UserButton>`, backend JWKS
+> verification).
+
 ---
 
 ## Phase 4 — storage (presigned R2/MinIO) ✅

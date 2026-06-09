@@ -1,11 +1,8 @@
 /** The shell around every signed-in page: header, nav, and the routed content. */
 import { NavLink, Outlet } from "react-router-dom";
 import { UserButton } from "@clerk/clerk-react";
-import { AUTH_MODE, useCurrentUser } from "../../lib/auth";
 
 export function AppLayout() {
-  const { user } = useCurrentUser();
-
   return (
     <div className="app">
       <header className="app-header">
@@ -17,11 +14,7 @@ export function AppLayout() {
           <NavLink to="/scores">My scores</NavLink>
         </nav>
         <div className="who">
-          {AUTH_MODE === "clerk" ? (
-            <UserButton afterSignOutUrl="/sign-in" />
-          ) : (
-            user?.email ?? "—"
-          )}
+          <UserButton afterSignOutUrl="/sign-in" />
         </div>
       </header>
       <main className="app-main">

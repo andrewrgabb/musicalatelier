@@ -1,20 +1,14 @@
 /**
  * The frontend auth boundary — the mirror of the backend's auth adapter.
  *
- * Screens NEVER call an auth provider's SDK directly. They use:
- *   - useCurrentUser() — the signed-in user (or null while loading / signed out)
+ * Screens NEVER call Clerk's SDK directly. They use:
+ *   - useCurrentUser() — the signed-in user (or null while loading)
  *   - <RequireAuth>   — gate a route behind being signed in
  *
- * Two modes, chosen by whether a Clerk publishable key is present:
- *   - stub  (no key): the API treats every request as a fixed dev user, so
- *                     there's no token and no login screen — `GET /me` always
- *                     succeeds. Great for local development.
- *   - clerk (key set): wrap the app in Clerk, hand the API a real Bearer token,
- *                      and require sign-in. The ONLY Clerk-specific code lives
- *                      in this file and in SignInPage.
- *
- * Either way, the rest of the app sees the same { user, loading } shape via
- * useCurrentUser(), so feature screens are identical in both modes.
+ * All Clerk-specific code is confined to this file and SignInPage. We wrap the
+ * app in <ClerkProvider>, hand the API client a real Bearer token, and require
+ * sign-in. The rest of the app just reads { user, loading } via
+ * useCurrentUser(), so swapping providers later touches only these two files.
  */
 import {
   createContext,
@@ -28,9 +22,12 @@ import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { api, setTokenGetter } from "./api";
 
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
-
-/** Which auth mode the frontend runs in (mirrors the API's AUTH_MODE). */
-export const AUTH_MODE: "clerk" | "stub" = CLERK_KEY ? "clerk" : "stub";
+if (!CLERK_KEY) {
+  throw new Error(
+    "VITE_CLERK_PUBLISHABLE_KEY is not set. Create a free Clerk app and add its " +
+      "publishable key to your .env (see .env.example)."
+  );
+}
 
 export interface CurrentUser {
   id: string;
@@ -45,34 +42,8 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState>({ user: null, loading: true });
 
-/** Fetch our internal user from the API. Shared by both modes. */
-function useInternalUser(enabled: boolean): AuthState {
-  const [state, setState] = useState<AuthState>({ user: null, loading: true });
-  useEffect(() => {
-    if (!enabled) {
-      setState({ user: null, loading: false });
-      return;
-    }
-    let cancelled = false;
-    api<{ user: CurrentUser }>("/me")
-      .then((res) => !cancelled && setState({ user: res.user, loading: false }))
-      .catch(() => !cancelled && setState({ user: null, loading: false }));
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled]);
-  return state;
-}
-
-// --- stub mode ---------------------------------------------------------------
-
-function StubAuthProvider({ children }: { children: ReactNode }) {
-  const state = useInternalUser(true); // /me always succeeds in stub mode
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
-}
-
-// --- clerk mode --------------------------------------------------------------
-
+/** Bridges Clerk's session into our app: registers the token getter, then
+ *  resolves our internal user from the API once signed in. */
 function ClerkBridge({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
 
@@ -82,30 +53,38 @@ function ClerkBridge({ children }: { children: ReactNode }) {
     setTokenGetter(async () => (await getToken()) ?? null);
   }, [getToken]);
 
-  // Only resolve the internal user once Clerk is loaded AND the user is signed
-  // in (otherwise /me would 401).
-  const internal = useInternalUser(isLoaded && isSignedIn === true);
-  const loading = !isLoaded || (isSignedIn === true && internal.loading);
-  const value: AuthState = { user: isSignedIn ? internal.user : null, loading };
+  const [internal, setInternal] = useState<AuthState>({
+    user: null,
+    loading: true,
+  });
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setInternal({ user: null, loading: false });
+      return;
+    }
+    let cancelled = false;
+    api<{ user: CurrentUser }>("/me")
+      .then((res) => !cancelled && setInternal({ user: res.user, loading: false }))
+      .catch(() => !cancelled && setInternal({ user: null, loading: false }));
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn]);
+
+  const value: AuthState = {
+    user: isSignedIn ? internal.user : null,
+    loading: !isLoaded || (isSignedIn === true && internal.loading),
+  };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-function ClerkAuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider publishableKey={CLERK_KEY!} afterSignOutUrl="/sign-in">
       <ClerkBridge>{children}</ClerkBridge>
     </ClerkProvider>
-  );
-}
-
-// --- public API --------------------------------------------------------------
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  return AUTH_MODE === "clerk" ? (
-    <ClerkAuthProvider>{children}</ClerkAuthProvider>
-  ) : (
-    <StubAuthProvider>{children}</StubAuthProvider>
   );
 }
 

@@ -13,9 +13,8 @@ those hops are ~1–2 ms. The browser reaches it at `api.<your-domain>`.
 
 ## Responsibilities
 
-- **Authenticate** every protected request via the swappable auth adapter
-  (verifies a JWT against the issuer's JWKS; in local dev a stub returns a fixed
-  test user).
+- **Authenticate** every protected request via the auth adapter (verifies the
+  request's JWT against the issuer's JWKS — real auth in every environment).
 - **Read/write the database** through Prisma (users, scores, job status).
 - **Issue presigned R2 URLs** so the browser uploads/downloads files *directly*
   to/from storage — file bytes never stream through the API.
@@ -80,11 +79,11 @@ Auth is the most provider-specific part of any app, so we hide it behind a thin
 boundary. The rest of the codebase never imports Clerk's SDK — it depends only
 on a normalised `Identity` and on `req.user` (our local user row).
 
-- **`lib/auth/verify.ts`** — `authenticate(req)` returns an `Identity`. Two
-  modes via `AUTH_MODE`: `stub` (local dev, a fixed test user, no provider
-  needed) and `clerk` (verifies the Bearer JWT against the issuer's JWKS with
-  `jose`). The claim mapping is the only provider-specific code, and it lives
-  here — swap providers by changing config in this one file.
+- **`lib/auth/verify.ts`** — `authenticate(req)` returns an `Identity` by
+  verifying the request's Bearer JWT against the issuer's JWKS with `jose`. The
+  verification is generic OIDC; the claim mapping is the only provider-specific
+  code, and it lives here — swap providers (Clerk → WorkOS/Auth0/…) by changing
+  config (`CLERK_ISSUER`, `CLERK_JWKS_URL`, claim names) in this one file.
 - **`lib/auth/middleware.ts`** — `requireAuth`: verify → **upsert the local
   `users` row** by `external_auth_id` → attach `req.user` + `req.auth`.
 - Protect any route by adding `requireAuth`; see `GET /me`.
@@ -95,8 +94,10 @@ foreign-keys to our internal `users.id`, never the provider's id — so the sche
 isn't coupled to Clerk's id format. On first login the adapter upserts by
 `external_auth_id`.
 
-Local dev defaults to `AUTH_MODE=stub`, so you can build and test everything
-without a Clerk account.
+Auth is **always real** — there's no "skip login" mode. Locally you point at a
+free Clerk *development* instance (its keys allow `localhost`). The backend only
+needs `CLERK_ISSUER` + `CLERK_JWKS_URL` (no secret key — verification uses
+public keys).
 
 ## File storage (presigned URLs)
 
@@ -131,7 +132,7 @@ src/
 │  ├─ bullboard.ts       # Bull Board dashboard router (+ Basic-auth guard)
 │  └─ auth/              # the swappable auth adapter
 │     ├─ identity.ts     #   the normalised Identity shape
-│     ├─ verify.ts       #   authenticate() — stub | clerk (JWKS via jose)
+│     ├─ verify.ts       #   authenticate() — verify JWT via JWKS (jose)
 │     └─ middleware.ts   #   requireAuth — verify + upsert user + attach req.user
 ├─ prisma/
 │  ├─ schema.prisma      # the database blueprint (models + enums)
@@ -163,7 +164,8 @@ pnpm --filter @musical-atelier/api dev    # hot-reloading dev server
 
 It reads configuration from the repo-root `.env`. Key variables (see
 [`.env.example`](../../.env.example)): `PORT`, `APP_ORIGIN` (CORS), `REDIS_URL`,
-`DATABASE_URL` / `DIRECT_URL`, the `R2_*` group, and the `AUTH_MODE` group.
+`DATABASE_URL` / `DIRECT_URL`, the `R2_*` group, and the Clerk group
+(`CLERK_ISSUER`, `CLERK_JWKS_URL`).
 
 ## Why these choices
 

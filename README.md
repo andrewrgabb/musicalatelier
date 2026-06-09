@@ -73,7 +73,7 @@ no matter where the user is.
 | **Auth** | Sign-in and accounts | Clerk (behind an adapter) | Hosted |
 | **File storage** | Holds uploaded images & results | Cloudflare R2 | Global |
 
-Locally, every cloud service has a **real open-source counterpart** you run on
+Locally, most cloud services have a **real open-source counterpart** you run on
 your own machine — so you develop against the actual software, not a fake:
 
 | Cloud (prod) | Local (dev) |
@@ -81,7 +81,11 @@ your own machine — so you develop against the actual software, not a fake:
 | Fly Managed Postgres | `postgres` container |
 | Fly/Upstash Redis | `redis` container |
 | Cloudflare R2 | **MinIO** container (S3-compatible) |
-| Clerk | a built-in **dev auth stub** (no login needed) |
+| Clerk | a Clerk **development instance** (free; hosted, but works on localhost) |
+
+The one exception is **Clerk** — it's hosted SaaS with no local server, so you
+point at a free Clerk *development* instance (its keys allow `localhost`).
+Auth is always real; there's no "skip login" mode.
 
 Only the *addresses and passwords* change between local and prod — never the
 code. That swap happens entirely through environment variables (see
@@ -160,6 +164,7 @@ Each of those folders has its own README explaining what it does and how.
 | **pnpm** | package manager for the JS workspaces | `npm install -g pnpm` |
 | **uv** | Python tooling for the worker | `brew install uv` |
 | **Docker Desktop** | runs postgres/redis/minio locally | `brew install --cask docker` |
+| **A free Clerk account** | authentication (no local stand-in) | https://clerk.com |
 
 > macOS note: installing Docker Desktop via Homebrew asks for your password at
 > the end (it creates a system symlink). Run it in your own terminal so you can
@@ -170,6 +175,11 @@ Each of those folders has its own README explaining what it does and how.
 ```bash
 cp .env.example .env       # the defaults already match docker-compose.yml
 ```
+
+Then fill in the **Clerk** values (the one service with no local stand-in).
+Create a free app at https://clerk.com → **API keys**, and set
+`VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_ISSUER`, and `CLERK_JWKS_URL` in `.env`
+(see the comments in `.env.example`). Everything else works with the defaults.
 
 ### 2. Start the backing services (Postgres, Redis, MinIO)
 
@@ -204,8 +214,9 @@ pnpm --filter @musical-atelier/web dev
 
 ### 5. Try the demo
 
-Open the website at **http://localhost:5173** (you're auto-signed-in as a dev
-user in local stub mode). Upload any image or PDF, then watch "My scores" move
+Open the website at **http://localhost:5173**. You'll be prompted to **sign in
+via Clerk** (create a test account — it's your Clerk dev instance). Then upload
+any image or PDF, and watch "My scores" move
 through `queued → processing → completed` live, and click **Show preview** to
 see the transcribed MusicXML rendered in the browser. You can also watch the job
 flow through the queue at **http://localhost:8080/admin/queues** (Bull Board).

@@ -48,9 +48,10 @@ export const env = {
     forcePathStyle: (process.env.R2_FORCE_PATH_STYLE ?? "true") === "true",
   },
 
+  // Auth is always real (JWT verified against the issuer's JWKS). These are
+  // required — set up a free Clerk app and fill them in (see .env.example).
   auth: {
-    mode: (process.env.AUTH_MODE ?? "stub") as "stub" | "clerk",
-    issuer: process.env.CLERK_ISSUER ?? "",
-    jwksUrl: process.env.CLERK_JWKS_URL ?? "",
+    issuer: required("CLERK_ISSUER"),
+    jwksUrl: required("CLERK_JWKS_URL"),
   },
 };
