@@ -13,9 +13,12 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
-    "db:push": "dotenv -e ../../.env -- prisma db push"
+    "db:push": "dotenv -e ../../.env -- prisma db push",
+    "verify:storage": "tsx scripts/storage-roundtrip.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/s3-request-presigner": "^3.717.0",
     "@musical-atelier/contracts": "workspace:*",
     "@prisma/client": "^6.1.0",
     "cors": "^2.8.5",

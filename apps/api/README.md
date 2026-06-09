@@ -84,6 +84,22 @@ isn't coupled to Clerk's id format. On first login the adapter upserts by
 Local dev defaults to `AUTH_MODE=stub`, so you can build and test everything
 without a Clerk account.
 
+## File storage (presigned URLs)
+
+Uploaded images/PDFs and generated MusicXML live in **object storage** — MinIO
+locally, Cloudflare R2 in prod (same S3 SDK, different endpoint + credentials).
+
+The rule: **file bytes never stream through the API.** Instead `lib/storage.ts`
+issues short-lived **presigned URLs** and the browser talks to storage directly:
+- `presignUpload(key, contentType)` → a URL the browser `PUT`s the file to.
+- `presignDownload(key)` → a URL the browser `GET`s the result from.
+
+This keeps the API fast, cheap, and stateless even for large files. Verify the
+plumbing any time with:
+```bash
+pnpm --filter @musical-atelier/api verify:storage
+```
+
 ## Layout
 
 We use a **feature-based** structure — code is grouped by feature (a vertical
@@ -96,6 +112,7 @@ src/
 │  ├─ env.ts             # loads + validates environment variables
 │  ├─ redis.ts           # the shared ioredis connection (+ health check)
 │  ├─ prisma.ts          # the shared Prisma client (+ health check)
+│  ├─ storage.ts         # S3 client + presignUpload/presignDownload
 │  └─ auth/              # the swappable auth adapter
 │     ├─ identity.ts     #   the normalised Identity shape
 │     ├─ verify.ts       #   authenticate() — stub | clerk (JWKS via jose)

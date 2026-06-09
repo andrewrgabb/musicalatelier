@@ -8,7 +8,7 @@ the next begins. This log tracks what's done and how to check it.
 | 1 | Repo skeleton + docker compose (backing services, API `/healthz`, worker connects) | ✅ done |
 | 2 | Database — Prisma schema (`users`, `scores`) + first migration | ✅ done |
 | 3 | Auth adapter — `authenticate()` + dev stub, one protected route | ✅ done |
-| 4 | Storage — presigned upload/download against MinIO | — |
+| 4 | Storage — presigned upload/download against MinIO | ✅ done |
 | 5 | End-to-end flow with a **stub** transcription engine | — |
 | 6 | Real engine — swap in homr behind the same `transcribe()` adapter | — |
 | 7 | Frontend SPA — upload, live status list, score preview | — |
@@ -105,3 +105,23 @@ AUTH_MODE=clerk CLERK_JWKS_URL=https://example/.well-known/jwks.json \
 **Key property:** the rest of the app references `req.user.id` (our internal id)
 only — never the provider's id. Swapping providers changes config in
 `verify.ts`, not the schema or any feature code.
+
+---
+
+## Phase 4 — storage (presigned R2/MinIO) ✅
+
+**Built:**
+- `src/lib/storage.ts` — an S3 client pointed at `R2_ENDPOINT` (MinIO locally,
+  R2 in prod), path-style addressing, plus `presignUpload(key, contentType)`
+  and `presignDownload(key)` (5-minute URLs).
+- `scripts/storage-roundtrip.ts` — uploads then downloads a file using ONLY
+  presigned URLs and asserts the bytes match.
+
+**How to verify:**
+```bash
+pnpm --filter @musical-atelier/api verify:storage
+# ✓ uploaded ... ✓ downloaded ... ✓ round-trip OK — bytes match.
+```
+
+**Key property:** file bytes never pass through the API — the browser uploads
+and downloads directly to/from storage via short-lived presigned URLs.
