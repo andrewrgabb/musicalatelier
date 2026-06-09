@@ -46,7 +46,12 @@ function required(name: string): string {
 
 export const env = {
   port: Number(process.env.PORT ?? 8080),
-  appOrigin: process.env.APP_ORIGIN ?? "http://localhost:5173",
+  // CORS allow-list. APP_ORIGIN may be a single origin or a comma-separated
+  // list (e.g. apex + www in production).
+  appOrigins: (process.env.APP_ORIGIN ?? "http://localhost:5173")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
 
   redisUrl: required("REDIS_URL"),
 

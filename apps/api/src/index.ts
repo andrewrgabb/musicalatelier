@@ -24,7 +24,7 @@ import {
 const app = express();
 
 // Allow the SPA's origin to call the API, and send cookies/credentials.
-app.use(cors({ origin: env.appOrigin, credentials: true }));
+app.use(cors({ origin: env.appOrigins, credentials: true }));
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -71,6 +71,6 @@ app.use(
 
 app.listen(env.port, () => {
   console.log(`[api] listening on http://localhost:${env.port}`);
-  console.log(`[api] CORS origin allowed: ${env.appOrigin}`);
+  console.log(`[api] CORS origins allowed: ${env.appOrigins.join(", ")}`);
   console.log(`[api] auth issuer: ${env.auth.issuer}`);
 });
