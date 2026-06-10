@@ -183,22 +183,13 @@ export function ScoreCard({
               attempt={attempt}
               label={`Run ${score.attempts.length - i}`}
               previewing={previewAttemptId === attempt.id}
+              previewUrl={previewAttemptId === attempt.id ? previewUrl : null}
               onDownload={() => onDownload(attempt.id)}
               onDownloadMidi={() => onDownloadMidi(attempt.id)}
               onTogglePreview={() => onTogglePreview(attempt.id)}
             />
           ))}
         </div>
-
-        {previewUrl && (
-          <Suspense
-            fallback={
-              <div className="text-sm text-muted-foreground">Loading preview…</div>
-            }
-          >
-            <ScorePreview url={previewUrl} />
-          </Suspense>
-        )}
       </CardContent>
 
       <Dialog open={reprocessOpen} onOpenChange={setReprocessOpen}>
@@ -283,6 +274,7 @@ function AttemptRow({
   attempt,
   label,
   previewing,
+  previewUrl,
   onDownload,
   onDownloadMidi,
   onTogglePreview,
@@ -290,6 +282,7 @@ function AttemptRow({
   attempt: Attempt;
   label: string;
   previewing: boolean;
+  previewUrl: string | null;
   onDownload: () => void;
   onDownloadMidi: () => void;
   onTogglePreview: () => void;
@@ -344,6 +337,16 @@ function AttemptRow({
             )}
           </Button>
         </div>
+      )}
+
+      {previewing && previewUrl && (
+        <Suspense
+          fallback={
+            <div className="text-sm text-muted-foreground">Loading preview…</div>
+          }
+        >
+          <ScorePreview url={previewUrl} />
+        </Suspense>
       )}
     </div>
   );
