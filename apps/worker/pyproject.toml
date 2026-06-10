@@ -16,6 +16,8 @@ dependencies = [
     "asyncpg>=0.29.0",
     # Converts the engine's MusicXML output into a downloadable MIDI file.
     "music21>=9.1.0",
+    # Upscales too-small images so Audiveris can detect their staff lines.
+    "pillow>=10.0.0",
 ]
 
 [tool.uv]

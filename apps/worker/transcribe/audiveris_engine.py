@@ -149,15 +149,23 @@ def _find_output(out_dir: Path) -> str:
     raise RuntimeError(f"Audiveris produced no MusicXML under {out_dir}")
 
 
-def transcribe(input_path: str, options: dict | None = None) -> str:
-    """Run Audiveris on `input_path` with `options` and return the MusicXML."""
-    cmd = _audiveris_cmd()
-    constants = _constant_args(options)
-    out_dir = Path(tempfile.mkdtemp(prefix="audiveris-"))
+# Auto-upscale config. Audiveris needs a staff interline of ~15–20 px; small
+# images (screenshots, web images) come in well below that. If a run fails with
+# the low-resolution signature we upscale the image so its long edge reaches the
+# target, capped by a max factor so we never hand the JVM a giant bitmap.
+_UPSCALE_TARGET_LONG_EDGE = 3000
+_UPSCALE_MAX_FACTOR = 4.0
 
+
+def _run_audiveris(cmd: list[str], constants: list[str], input_path: str) -> tuple[str | None, str]:
+    """Run Audiveris once. Returns (musicxml | None, log_tail).
+
+    Returns None when Audiveris exits cleanly but exports nothing (e.g. no staff
+    found). Raises RuntimeError on a non-zero exit (treated as retryable).
+    """
+    out_dir = Path(tempfile.mkdtemp(prefix="audiveris-"))
     argv = [*cmd, *constants, "-batch", "-export", "-output", str(out_dir), "--", input_path]
     print(f"[audiveris] {' '.join(shlex.quote(a) for a in argv)}")
-
     try:
         proc = subprocess.run(
             argv,
@@ -165,29 +173,88 @@ def transcribe(input_path: str, options: dict | None = None) -> str:
             text=True,
             timeout=int(os.environ.get("AUDIVERIS_TIMEOUT_SECONDS", "600")),
         )
-        # Audiveris logs everything to stdout. Keep the tail around so any
-        # failure (or a clean exit that produced nothing) is diagnosable.
+        # Audiveris logs everything to stdout; keep the tail for diagnostics.
         log_tail = ((proc.stdout or "") + (proc.stderr or ""))[-2000:]
-
         if proc.returncode != 0:
             raise RuntimeError(f"Audiveris failed (exit {proc.returncode}): {log_tail}")
-
         try:
-            return _find_output(out_dir)
-        except RuntimeError as err:
-            # Exit 0 but no MusicXML — usually no staves were found / recognition
-            # produced nothing. Give a friendly hint for the common case (image
-            # too low-res for staff detection), then surface Audiveris's own log.
-            low = log_tail.lower()
-            if "interline" in low or "resolution is too low" in low or "flagged as invalid" in low:
-                hint = (
-                    "Audiveris couldn't detect a staff — the image resolution looks "
-                    "too low. Use a clearer scan/photo (around 300 DPI)."
-                )
-            else:
-                hint = "Audiveris completed but exported no MusicXML."
-            # Deterministic: the same input will fail the same way — don't retry.
-            raise TranscriptionInputError(f"{hint} Audiveris log:\n{log_tail}") from err
+            return _find_output(out_dir), log_tail
+        except RuntimeError:
+            return None, log_tail
     finally:
         # Audiveris also drops a .omr project file in here; clean the whole dir.
         shutil.rmtree(out_dir, ignore_errors=True)
+
+
+def _looks_low_res(log_tail: str) -> bool:
+    low = log_tail.lower()
+    return (
+        "interline" in low
+        or "resolution is too low" in low
+        or "flagged as invalid" in low
+    )
+
+
+def _upscale_image(input_path: str) -> str | None:
+    """Upscale a too-small raster so Audiveris can detect its staves.
+
+    Returns the path to a new temp PNG, or None if upscaling can't help (PDF,
+    already large enough, or Pillow/the image is unavailable).
+    """
+    if Path(input_path).suffix.lower() == ".pdf":
+        return None  # Audiveris rasterises PDFs itself; Pillow can't open them.
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        im = Image.open(input_path)
+    except Exception:  # noqa: BLE001 — unreadable image; let Audiveris report it
+        return None
+
+    long_edge = max(im.size)
+    if long_edge >= _UPSCALE_TARGET_LONG_EDGE:
+        return None  # already big enough — upscaling wouldn't change the verdict
+
+    factor = min(_UPSCALE_MAX_FACTOR, _UPSCALE_TARGET_LONG_EDGE / long_edge)
+    new_size = (round(im.width * factor), round(im.height * factor))
+    fd, out_path = tempfile.mkstemp(suffix=".png", prefix="upscaled-")
+    os.close(fd)
+    im.convert("RGB").resize(new_size, Image.LANCZOS).save(out_path)
+    print(f"[audiveris] upscaled {im.size} -> {new_size} (x{factor:.1f}) and retrying")
+    return out_path
+
+
+def transcribe(input_path: str, options: dict | None = None) -> str:
+    """Run Audiveris on `input_path` with `options` and return the MusicXML.
+
+    If the first run fails because the image is too low-resolution for staff
+    detection, upscale it once and retry — small images then transcribe without
+    the user having to pre-process them.
+    """
+    cmd = _audiveris_cmd()
+    constants = _constant_args(options)
+
+    musicxml, log_tail = _run_audiveris(cmd, constants, input_path)
+    if musicxml is not None:
+        return musicxml
+
+    if _looks_low_res(log_tail):
+        upscaled = _upscale_image(input_path)
+        if upscaled is not None:
+            try:
+                musicxml, log_tail = _run_audiveris(cmd, constants, upscaled)
+                if musicxml is not None:
+                    return musicxml
+            finally:
+                os.unlink(upscaled)
+
+    # Still nothing — a deterministic input problem, so don't retry.
+    if _looks_low_res(log_tail):
+        hint = (
+            "Audiveris couldn't detect a staff — the image resolution is too low "
+            "even after upscaling. Use a clearer scan/photo (around 300 DPI)."
+        )
+    else:
+        hint = "Audiveris completed but exported no MusicXML."
+    raise TranscriptionInputError(f"{hint} Audiveris log:\n{log_tail}")

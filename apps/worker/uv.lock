@@ -672,6 +672,7 @@ dependencies = [
     { name = "boto3" },
     { name = "bullmq" },
     { name = "music21" },
+    { name = "pillow" },
     { name = "python-dotenv" },
 ]
 
@@ -681,6 +682,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.34.0" },
     { name = "bullmq", specifier = ">=2.0.0" },
     { name = "music21", specifier = ">=9.1.0" },
+    { name = "pillow", specifier = ">=10.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 
