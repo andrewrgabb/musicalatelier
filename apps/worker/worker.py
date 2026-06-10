@@ -39,6 +39,20 @@ from transcribe.midi import musicxml_to_midi  # noqa: E402
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 
+def _redacted(url: str) -> str:
+    """Mask any password in a connection URL so it's safe to log."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    if parts.password:
+        user = parts.username or ""
+        netloc = f"{user}:***@{parts.hostname or ''}"
+        if parts.port:
+            netloc += f":{parts.port}"
+        return urlunsplit(parts._replace(netloc=netloc))
+    return url
+
+
 def _ext_from_key(key: str) -> str:
     suffix = Path(key).suffix
     return suffix if suffix else ".bin"
@@ -131,7 +145,7 @@ async def process(job, job_token):
 async def main():
     from bullmq import Worker
 
-    print(f"[worker] connecting to Redis at {REDIS_URL}")
+    print(f"[worker] connecting to Redis at {_redacted(REDIS_URL)}")
     worker = Worker(TRANSCRIPTION_QUEUE, process, {"connection": REDIS_URL})
     print(f"[worker] listening on queue '{TRANSCRIPTION_QUEUE}' — waiting for jobs")
 
