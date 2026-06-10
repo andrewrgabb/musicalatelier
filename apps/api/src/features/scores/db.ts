@@ -69,3 +69,8 @@ export function createAttempt(input: {
 export function setAttemptJobId(id: string, jobId: string): Promise<Attempt> {
   return prisma.attempt.update({ where: { id }, data: { jobId } });
 }
+
+/** Delete a score (its attempts cascade via the FK). */
+export function deleteScore(id: string): Promise<Score> {
+  return prisma.score.delete({ where: { id } });
+}

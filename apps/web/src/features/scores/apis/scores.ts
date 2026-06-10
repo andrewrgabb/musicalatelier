@@ -43,6 +43,8 @@ export interface Score {
 
 export interface ScoreDetail extends Omit<Score, "attempts"> {
   attempts: AttemptWithUrls[];
+  /** Presigned GET for the original uploaded image/PDF. */
+  sourceUrl: string | null;
 }
 
 /** Step 1: create the score row and get a presigned upload URL. */
@@ -89,4 +91,9 @@ export function listScores() {
 
 export function getScore(id: string) {
   return api<ScoreDetail>(`/scores/${id}`);
+}
+
+/** Delete a score and all its files + attempts. */
+export function deleteScore(id: string) {
+  return api<void>(`/scores/${id}`, { method: "DELETE" });
 }

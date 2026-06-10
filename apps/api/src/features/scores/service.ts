@@ -12,12 +12,13 @@ import {
   type TranscriptionJobData,
   type TranscriptionOptions,
 } from "@musical-atelier/contracts";
-import { presignDownload, presignUpload } from "../../lib/storage.js";
+import { deletePrefix, presignDownload, presignUpload } from "../../lib/storage.js";
 import { transcriptionQueue } from "../../lib/queue.js";
 import { BadRequestError, NotFoundError } from "../../lib/http-errors.js";
 import {
   createAttempt,
   createScore,
+  deleteScore,
   getScoreForUser,
   listScoresForUser,
   setAttemptJobId,
@@ -206,17 +207,35 @@ async function presignAttempt(attempt: Attempt): Promise<AttemptWithUrls> {
 }
 
 /**
- * Status for one of the user's scores: the score plus every attempt, each with
- * presigned download URLs (MusicXML + MIDI) when completed. 404 if not theirs.
+ * Status for one of the user's scores: the score (with a presigned URL to view
+ * the original upload) plus every attempt, each with presigned download URLs
+ * (MusicXML + MIDI) when completed. 404 if not theirs.
  */
 export async function getScoreStatus(scoreId: string, userId: string) {
   const score = await getScoreForUser(scoreId, userId);
   if (!score) throw new NotFoundError("score not found");
-  const attempts = await Promise.all(score.attempts.map(presignAttempt));
-  return { ...score, attempts };
+  const [attempts, sourceUrl] = await Promise.all([
+    Promise.all(score.attempts.map(presignAttempt)),
+    presignDownload(score.sourceKey),
+  ]);
+  return { ...score, attempts, sourceUrl };
 }
 
 /** A user's scores with their attempts (no presigned URLs — the list is light). */
 export function listScores(userId: string): Promise<ScoreWithAttempts[]> {
   return listScoresForUser(userId);
+}
+
+/**
+ * Delete one of the user's scores: its stored files (the uploaded source and
+ * every attempt's outputs) and the row (attempts cascade). 404 if not theirs.
+ */
+export async function deleteScoreForUser(scoreId: string, userId: string): Promise<void> {
+  const score = await getScoreForUser(scoreId, userId);
+  if (!score) throw new NotFoundError("score not found");
+  await Promise.all([
+    deletePrefix(`uploads/${userId}/${scoreId}/`),
+    deletePrefix(`outputs/${scoreId}/`),
+  ]);
+  await deleteScore(scoreId);
 }

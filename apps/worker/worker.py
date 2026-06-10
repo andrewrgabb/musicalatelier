@@ -27,10 +27,13 @@ from dotenv import find_dotenv, load_dotenv
 # container there's no .env and Fly injects real env vars, so this is a no-op.
 load_dotenv(find_dotenv(usecwd=True))
 
+from bullmq import UnrecoverableError  # noqa: E402
+
 from contract import ENGINE_NAME, TRANSCRIPTION_QUEUE  # noqa: E402
 import db  # noqa: E402
 import storage  # noqa: E402
 from transcribe import transcribe  # noqa: E402
+from transcribe.errors import TranscriptionInputError  # noqa: E402
 from transcribe.midi import musicxml_to_midi  # noqa: E402
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
@@ -111,9 +114,16 @@ async def process(job, job_token):
         )
         return {"outputKey": output_key, "outputMidiKey": output_midi_key}
 
-    except Exception as err:  # noqa: BLE001 — record then re-raise for BullMQ
+    except TranscriptionInputError as err:
+        # The input itself can't be transcribed — retrying won't help, so fail it
+        # now (no further attempts) and record why.
         await db.set_failed(attempt_id, str(err))
-        print(f"[worker] job {job.id} FAILED: {err}")
+        print(f"[worker] job {job.id} FAILED (unrecoverable): {err}")
+        raise UnrecoverableError(str(err)) from err
+
+    except Exception as err:  # noqa: BLE001 — record then re-raise; BullMQ retries
+        await db.set_failed(attempt_id, str(err))
+        print(f"[worker] job {job.id} FAILED (will retry if attempts remain): {err}")
         raise
 
 

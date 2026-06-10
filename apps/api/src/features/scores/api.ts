@@ -8,12 +8,14 @@
  *   POST /scores/:id/uploaded  -> file is uploaded; start the first attempt
  *   POST /scores/:id/reprocess -> start another attempt with (new) options
  *   GET  /scores               -> list my scores + their attempts
- *   GET  /scores/:id           -> one score + attempts (+ download URLs)
+ *   GET  /scores/:id           -> one score + attempts (+ source/download URLs)
+ *   DELETE /scores/:id         -> delete a score (its files + attempts)
  */
 import { Router } from "express";
 import { requireAuth } from "../../lib/auth/middleware.js";
 import {
   createScoreWithUploadUrl,
+  deleteScoreForUser,
   enqueueTranscription,
   getScoreStatus,
   listScores,
@@ -74,6 +76,15 @@ scoresRouter.get("/", async (req, res, next) => {
 scoresRouter.get("/:id", async (req, res, next) => {
   try {
     res.json(await getScoreStatus(req.params.id, req.user!.id));
+  } catch (err) {
+    next(err);
+  }
+});
+
+scoresRouter.delete("/:id", async (req, res, next) => {
+  try {
+    await deleteScoreForUser(req.params.id, req.user!.id);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

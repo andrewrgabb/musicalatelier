@@ -38,6 +38,8 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from .errors import TranscriptionInputError
+
 # Curated option -> Audiveris application-constant key (verified vs 5.9.0 source).
 _INPUT_QUALITY_KEY = "org.audiveris.omr.sheet.Profiles.defaultQuality"
 _BINARIZATION_KIND_KEY = "org.audiveris.omr.image.FilterDescriptor.defaultKind"
@@ -184,7 +186,8 @@ def transcribe(input_path: str, options: dict | None = None) -> str:
                 )
             else:
                 hint = "Audiveris completed but exported no MusicXML."
-            raise RuntimeError(f"{hint} Audiveris log:\n{log_tail}") from err
+            # Deterministic: the same input will fail the same way — don't retry.
+            raise TranscriptionInputError(f"{hint} Audiveris log:\n{log_tail}") from err
     finally:
         # Audiveris also drops a .omr project file in here; clean the whole dir.
         shutil.rmtree(out_dir, ignore_errors=True)

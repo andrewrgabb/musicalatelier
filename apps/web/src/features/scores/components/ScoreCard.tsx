@@ -8,9 +8,11 @@ import {
   EyeOff,
   FileMusic,
   FileText,
+  Image as ImageIcon,
   LoaderCircle,
   Music4,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +31,7 @@ import {
   defaultOptions,
 } from "./TranscriptionOptionsForm";
 import {
+  deleteScore,
   getScore,
   reprocessScore,
   type Attempt,
@@ -56,7 +59,13 @@ function summarizeOptions(o: TranscriptionOptions | null): string {
   return parts.length ? parts.join(" · ") : "Default options";
 }
 
-export function ScoreCard({ score }: { score: Score }) {
+export function ScoreCard({
+  score,
+  onDeleted,
+}: {
+  score: Score;
+  onDeleted?: (id: string) => void;
+}) {
   const Icon = score.sourceType === "pdf" ? FileText : FileMusic;
   const created = new Date(score.createdAt).toLocaleString();
 
@@ -66,6 +75,9 @@ export function ScoreCard({ score }: { score: Score }) {
   const [reprocessOpen, setReprocessOpen] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   const [options, setOptions] = useState<TranscriptionOptions>(defaultOptions);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Presigned URLs are only on the detail endpoint, so fetch it on demand.
   async function urlFor(attemptId: string, kind: "music" | "midi"): Promise<string | null> {
@@ -95,6 +107,11 @@ export function ScoreCard({ score }: { score: Score }) {
     setPreviewAttemptId(url ? attemptId : null);
   }
 
+  async function onViewOriginal() {
+    const detail = await getScore(score.id);
+    if (detail.sourceUrl) window.open(detail.sourceUrl, "_blank");
+  }
+
   async function onReprocess() {
     setReprocessing(true);
     try {
@@ -105,6 +122,19 @@ export function ScoreCard({ score }: { score: Score }) {
       toast.error(err instanceof Error ? err.message : "Re-process failed");
     } finally {
       setReprocessing(false);
+    }
+  }
+
+  async function onDelete() {
+    setDeleting(true);
+    try {
+      await deleteScore(score.id);
+      toast.success("Deleted");
+      setDeleteOpen(false);
+      onDeleted?.(score.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
     }
   }
 
@@ -123,10 +153,25 @@ export function ScoreCard({ score }: { score: Score }) {
               <div className="text-xs text-muted-foreground">{created}</div>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setReprocessOpen(true)}>
-            <RefreshCw />
-            Re-process
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={onViewOriginal}>
+              <ImageIcon />
+              View original
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setReprocessOpen(true)}>
+              <RefreshCw />
+              Re-process
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 />
+              Delete
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-col divide-y rounded-lg border">
@@ -186,6 +231,40 @@ export function ScoreCard({ score }: { score: Score }) {
                 <>
                   <RefreshCw />
                   Re-process
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this score?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the uploaded file and every transcription
+              run (MusicXML + MIDI). This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={onDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <LoaderCircle className="animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <Trash2 />
+                  Delete
                 </>
               )}
             </Button>
