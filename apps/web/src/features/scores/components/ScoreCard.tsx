@@ -35,6 +35,7 @@ import {
   getScore,
   reprocessScore,
   type Attempt,
+  type OmrEngine,
   type Score,
   type TranscriptionOptions,
 } from "@/features/scores/apis/scores";
@@ -74,6 +75,7 @@ export function ScoreCard({
 
   const [reprocessOpen, setReprocessOpen] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [engine, setEngine] = useState<OmrEngine>("audiveris");
   const [options, setOptions] = useState<TranscriptionOptions>(defaultOptions);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -115,7 +117,7 @@ export function ScoreCard({
   async function onReprocess() {
     setReprocessing(true);
     try {
-      await reprocessScore(score.id, options);
+      await reprocessScore(score.id, engine, options);
       toast.success("Re-processing started");
       setReprocessOpen(false);
     } catch (err) {
@@ -209,6 +211,8 @@ export function ScoreCard({
             </DialogDescription>
           </DialogHeader>
           <TranscriptionOptionsForm
+            engine={engine}
+            onEngineChange={setEngine}
             value={options}
             onChange={setOptions}
             disabled={reprocessing}

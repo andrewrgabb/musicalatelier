@@ -6,7 +6,7 @@
  * always load a score with its attempts (newest first).
  */
 import type { Attempt, Prisma, Score, SourceType } from "@prisma/client";
-import type { TranscriptionOptions } from "@musical-atelier/contracts";
+import type { OmrEngine, TranscriptionOptions } from "@musical-atelier/contracts";
 import { prisma } from "../../lib/prisma.js";
 
 /** A score with its attempts eagerly loaded (newest first). */
@@ -49,14 +49,16 @@ export function setScoreSourceKey(id: string, sourceKey: string): Promise<Score>
   return prisma.score.update({ where: { id }, data: { sourceKey } });
 }
 
-/** Start a new transcription run for a score, with the chosen options. */
+/** Start a new transcription run for a score, with the chosen engine + options. */
 export function createAttempt(input: {
   scoreId: string;
+  engine: OmrEngine;
   options?: TranscriptionOptions;
 }): Promise<Attempt> {
   return prisma.attempt.create({
     data: {
       scoreId: input.scoreId,
+      engine: input.engine,
       options:
         input.options === undefined
           ? undefined

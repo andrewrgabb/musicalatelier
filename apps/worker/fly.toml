@@ -17,6 +17,7 @@ primary_region = "syd"
 # with `fly secrets set` — see DEPLOY.md.
 [env]
   AUDIVERIS_TIMEOUT_SECONDS = "600"
+  HOMR_TIMEOUT_SECONDS = "600"
   # Where Tesseract's language data lives in the image (see Dockerfile).
   TESSDATA_PREFIX = "/usr/share/tesseract-ocr/5/tessdata"
 

@@ -17,10 +17,8 @@ STATUS_PROCESSING = "processing"
 STATUS_COMPLETED = "completed"
 STATUS_FAILED = "failed"
 
-# The OMR engine this worker runs (recorded on the attempt row).
-ENGINE_NAME = "audiveris"
-
 # Job data shape (for reference; Python reads these keys off job.data):
-#   { "scoreId": str, "attemptId": str, "sourceKey": str, "options": dict | None }
+#   { "scoreId": str, "attemptId": str, "sourceKey": str,
+#     "engine": "audiveris" | "homr", "options": dict | None }
 # Success return shape:
 #   { "outputKey": str, "outputMidiKey": str | None }

@@ -21,6 +21,7 @@ import {
   createScore,
   markUploaded,
   uploadToStorage,
+  type OmrEngine,
   type SourceType,
   type TranscriptionOptions,
 } from "@/features/scores/apis/scores";
@@ -38,6 +39,7 @@ export function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  const [engine, setEngine] = useState<OmrEngine>("audiveris");
   const [options, setOptions] = useState<TranscriptionOptions>(defaultOptions);
 
   async function onSubmit(e: React.FormEvent) {
@@ -50,7 +52,7 @@ export function UploadPage() {
         contentType: file.type || "application/octet-stream",
       });
       await uploadToStorage(uploadUrl, file);
-      await markUploaded(scoreId, options);
+      await markUploaded(scoreId, engine, options);
       toast.success("Uploaded — transcription started");
       navigate("/scores");
     } catch (err) {
@@ -106,7 +108,7 @@ export function UploadPage() {
             >
               <span className="flex items-center gap-2">
                 <Settings2 className="size-4 text-muted-foreground" />
-                Transcription options
+                Engine &amp; options
               </span>
               <span className="text-xs text-muted-foreground">
                 {showOptions ? "Hide" : "Customize"}
@@ -114,6 +116,8 @@ export function UploadPage() {
             </button>
             {showOptions && (
               <TranscriptionOptionsForm
+                engine={engine}
+                onEngineChange={setEngine}
                 value={options}
                 onChange={setOptions}
                 disabled={busy}

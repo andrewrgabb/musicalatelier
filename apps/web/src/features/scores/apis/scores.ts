@@ -7,13 +7,14 @@
  * presigned download URLs (MusicXML + MIDI) for completed attempts.
  */
 import type {
+  OmrEngine,
   ScoreStatus,
   TranscriptionOptions,
 } from "@musical-atelier/contracts";
 import { api } from "../../../lib/api";
 
 export type SourceType = "image" | "pdf";
-export type { TranscriptionOptions };
+export type { OmrEngine, TranscriptionOptions };
 
 export interface Attempt {
   id: string;
@@ -70,18 +71,26 @@ export async function uploadToStorage(uploadUrl: string, file: File) {
 }
 
 /** Step 3: tell the API the upload is done, which starts the first attempt. */
-export function markUploaded(scoreId: string, options?: TranscriptionOptions) {
+export function markUploaded(
+  scoreId: string,
+  engine: OmrEngine,
+  options?: TranscriptionOptions
+) {
   return api<{ scoreId: string; attemptId: string; status: ScoreStatus }>(
     `/scores/${scoreId}/uploaded`,
-    { method: "POST", body: { options } }
+    { method: "POST", body: { engine, options } }
   );
 }
 
-/** Re-run an already-uploaded score with (possibly different) options. */
-export function reprocessScore(scoreId: string, options?: TranscriptionOptions) {
+/** Re-run an already-uploaded score with a (possibly different) engine + options. */
+export function reprocessScore(
+  scoreId: string,
+  engine: OmrEngine,
+  options?: TranscriptionOptions
+) {
   return api<{ scoreId: string; attemptId: string; status: ScoreStatus }>(
     `/scores/${scoreId}/reprocess`,
-    { method: "POST", body: { options } }
+    { method: "POST", body: { engine, options } }
   );
 }
 

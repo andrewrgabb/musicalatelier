@@ -3,7 +3,7 @@
 Consumes the BullMQ `transcription` queue and runs the OMR pipeline:
   1. mark the attempt `processing`
   2. download the uploaded source from storage
-  3. run the Audiveris engine (with the run's options) behind transcribe()
+  3. run the chosen engine (audiveris | homr, with the run's options) via transcribe()
   4. convert the MusicXML to MIDI (best-effort)
   5. report progress (BullMQ progress events + the attempts row)
   6. upload the MusicXML + MIDI and mark the attempt `completed`
@@ -29,10 +29,10 @@ load_dotenv(find_dotenv(usecwd=True))
 
 from bullmq import UnrecoverableError  # noqa: E402
 
-from contract import ENGINE_NAME, TRANSCRIPTION_QUEUE  # noqa: E402
+from contract import TRANSCRIPTION_QUEUE  # noqa: E402
 import db  # noqa: E402
 import storage  # noqa: E402
-from transcribe import transcribe  # noqa: E402
+from transcribe import DEFAULT_ENGINE, transcribe  # noqa: E402
 from transcribe.errors import TranscriptionInputError  # noqa: E402
 from transcribe.midi import musicxml_to_midi  # noqa: E402
 
@@ -50,14 +50,15 @@ async def process(job, job_token):
     score_id = data["scoreId"]
     attempt_id = data["attemptId"]
     source_key = data["sourceKey"]
+    engine = data.get("engine") or DEFAULT_ENGINE
     options = data.get("options") or {}
     print(
         f"[worker] job {job.id} start: score={score_id} attempt={attempt_id} "
-        f"key={source_key}"
+        f"engine={engine} key={source_key}"
     )
 
     try:
-        await db.set_processing(attempt_id, ENGINE_NAME)
+        await db.set_processing(attempt_id, engine)
         await job.updateProgress(0)
 
         # 1) download the uploaded source (blocking S3 call off the event loop)
@@ -79,8 +80,8 @@ async def process(job, job_token):
                 await job.updateProgress(pct)
                 await db.set_progress(attempt_id, pct)
 
-            # 3) run the engine with this run's options
-            musicxml = await asyncio.to_thread(transcribe, input_path, options)
+            # 3) run the chosen engine with this run's options
+            musicxml = await asyncio.to_thread(transcribe, engine, input_path, options)
         finally:
             os.unlink(input_path)
 

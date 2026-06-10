@@ -16,10 +16,16 @@ export const TRANSCRIPTION_QUEUE = "transcription";
 /** The (single) job name on that queue. */
 export const TRANSCRIBE_JOB = "transcribe";
 
+/** The OMR engine used for a run (chosen per attempt). */
+export type OmrEngine = "audiveris" | "homr";
+
+export const OMR_ENGINES: OmrEngine[] = ["audiveris", "homr"];
+
 /**
  * Curated transcription options. These tune the Audiveris engine (the worker
- * maps them to its CLI flags). Kept small and stable since this crosses the
- * language boundary and is stored on the attempt row.
+ * maps them to its CLI flags); homr has no options and ignores them. Kept small
+ * and stable since this crosses the language boundary and is stored on the
+ * attempt row.
  */
 export interface TranscriptionOptions {
   /** How forgiving the classifier is about image quality. */
@@ -51,6 +57,8 @@ export interface TranscriptionJobData {
   attemptId: string;
   /** The R2/MinIO object key of the uploaded image/PDF to transcribe. */
   sourceKey: string;
+  /** Which OMR engine to run. */
+  engine: OmrEngine;
   /** The options chosen for this run (absent = engine defaults). */
   options?: TranscriptionOptions;
 }

@@ -352,3 +352,39 @@ take effect). End-to-end app run is the remaining manual check.
 `…image.FilterDescriptor.defaultKind`, `…image.GlobalDescriptor.defaultThreshold`,
 `…text.Language.defaultSpecification`, `…sheet.ProcessingSwitches.<switch>`. No
 `dynamics` switch exists in 5.9.0, so it was dropped from the curated set.
+
+---
+
+## Post-8 — homr restored as a user-selectable engine (branch `feat/transcription-options-midi`)
+
+After evaluating Audiveris on real inputs we wanted homr back too — not as the
+sole engine, but as a **per-upload choice**. Audiveris is stronger on clean
+printed scores/PDFs and is tunable; homr is more tolerant of low-res/odd images.
+The `attempts.engine` column already records which engine ran, so engine becomes
+a per-attempt selection rather than a server setting.
+
+**Built:**
+- `transcribe/__init__.py` is again a dispatcher: `transcribe(engine, path,
+  options)` lazily imports `audiveris_engine` or `homr_engine`. homr restored
+  (options arg accepted + ignored).
+- Contracts: `OmrEngine` type + `OMR_ENGINES`; `engine` added to the job data.
+- API: `enqueueTranscription` validates `engine` (default `audiveris`), stores it
+  on the attempt, and puts it on the job; `POST /:id/uploaded` and `/reprocess`
+  read `engine` from the body.
+- Worker: reads `engine` off the job, dispatches, and records it via
+  `set_processing`.
+- Web: an **Engine** select in `TranscriptionOptionsForm` (Audiveris | homr); the
+  Audiveris-only options gray out when homr is chosen. Threaded through upload +
+  re-process; each attempt shows the engine it used.
+- Packaging: `homr` back in `pyproject.toml` (Python pinned `<3.13` again),
+  Dockerfile re-adds the opencv/onnx libs + the model-weight bake, `fly.toml`
+  re-adds `HOMR_TIMEOUT_SECONDS`. The image carries both engines (large again).
+
+**Also in this branch:** auto-upscale + retry for low-res images (Audiveris),
+`UnrecoverableError` so deterministic bad-input failures don't retry, View
+original, and Delete score.
+
+**Verified:** contracts/api/web typecheck; worker `py_compile`; dispatcher routes
+both engines and errors clearly on an unknown one; Audiveris path proven on a real
+sample (incl. auto-upscale). homr runtime not re-smoked locally (weights download
+on first run) — it's the original shipped engine, unchanged besides the signature.

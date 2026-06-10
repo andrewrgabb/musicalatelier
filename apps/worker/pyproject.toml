@@ -2,7 +2,9 @@
 name = "musical-atelier-worker"
 version = "0.1.0"
 description = "Python worker — consumes the BullMQ transcription queue and runs the OMR engine."
-requires-python = ">=3.11"
+# Pinned <3.13: homr 0.6.2 requires Python <3.13, and onnxruntime/opencv have
+# the best wheel coverage there.
+requires-python = ">=3.11,<3.13"
 dependencies = [
     # The Python port of BullMQ. Interoperable with the Node producer because
     # both speak the same Redis Lua scripts on the same queue.
@@ -18,6 +20,8 @@ dependencies = [
     "music21>=9.1.0",
     # Upscales too-small images so Audiveris can detect their staff lines.
     "pillow>=10.0.0",
+    # The homr OMR engine (ONNX-based, no PyTorch), selectable per attempt.
+    "homr>=0.6.2",
 ]
 
 [tool.uv]

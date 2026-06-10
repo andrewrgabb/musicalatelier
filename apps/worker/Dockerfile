@@ -2,12 +2,14 @@
 # deploy from the repo root:
 #   fly deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile .
 #
-# The OMR engine is Audiveris: a Java app driven via its batch CLI, built from
-# source in a separate stage and dropped into the Python runtime alongside a JRE
-# and Tesseract. The Python worker also converts the MusicXML output to MIDI.
+# Two OMR engines ship; the user picks one per attempt:
+#   - Audiveris: a Java app driven via its batch CLI, built from source in a
+#     separate stage and dropped in alongside a JRE + Tesseract.
+#   - homr: an ONNX/Python lib whose model weights are pre-baked below.
+# The Python worker also converts the MusicXML output to MIDI.
 #
-# The JDK build stage + JRE + Tesseract make this image large and the build slow;
-# the VM needs real RAM — sized in fly.toml.
+# The JDK build stage + JRE + Tesseract + ONNX weights make this image large and
+# the build slow; the VM needs real RAM — sized in fly.toml.
 
 # ---------------------------------------------------------------------------
 # Stage 1 — build the Audiveris distribution from source.
@@ -38,13 +40,16 @@ RUN ./gradlew --no-daemon installDist \
 FROM python:3.12-slim
 
 # Native libs:
-#   Audiveris -> fontconfig + freetype (rendering/PDF)
-#   tesseract -> the OCR engine + English language data (eng.traineddata)
+#   Audiveris     -> fontconfig + freetype (rendering/PDF)
+#   tesseract     -> the OCR engine + English language data (eng.traineddata)
+#   homr/opencv   -> libGL + glib;  onnxruntime -> libgomp
+#   curl/ca-certs -> fetch a warm-up sample for baking homr's weights
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
      fontconfig libfreetype6 \
      tesseract-ocr tesseract-ocr-eng \
-     ca-certificates \
+     libgl1 libglib2.0-0 libgomp1 \
+     ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 # A JRE for Audiveris (copied from the Temurin image — matches the build JDK).
@@ -73,6 +78,15 @@ RUN uv sync --frozen
 
 # Fail the build early if the Audiveris launcher is broken (wrong JRE, etc.).
 RUN /opt/audiveris/bin/Audiveris -help || (echo "Audiveris launcher smoke test failed" && exit 1)
+
+# Pre-bake homr's model weights BEFORE copying app source, so this (slow,
+# network) layer is cached across source changes. Run homr once on a sample so
+# the weights download into this layer; the first real job is then fast and
+# offline. Inference may be killed for RAM during build, but the weights are
+# cached before that, so we tolerate a non-zero exit.
+RUN curl -fsSL https://raw.githubusercontent.com/BreezeWhite/oemer/main/figures/tabi.jpg -o /tmp/sample.jpg \
+  && (homr /tmp/sample.jpg || true) \
+  && rm -f /tmp/sample.jpg /tmp/sample.musicxml
 
 # Application source.
 COPY apps/worker/ ./

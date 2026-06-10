@@ -8,7 +8,9 @@
  */
 import type { Attempt, Score, SourceType } from "@prisma/client";
 import {
+  OMR_ENGINES,
   TRANSCRIBE_JOB,
+  type OmrEngine,
   type TranscriptionJobData,
   type TranscriptionOptions,
 } from "@musical-atelier/contracts";
@@ -33,6 +35,17 @@ function isSourceType(value: unknown): value is SourceType {
     typeof value === "string" &&
     (VALID_SOURCE_TYPES as string[]).includes(value)
   );
+}
+
+const DEFAULT_ENGINE: OmrEngine = "audiveris";
+
+/** Validate the chosen engine; default when absent. */
+export function validateEngine(raw: unknown): OmrEngine {
+  if (raw === undefined || raw === null) return DEFAULT_ENGINE;
+  if (!(OMR_ENGINES as string[]).includes(raw as string)) {
+    throw new BadRequestError(`engine must be one of ${OMR_ENGINES.join(", ")}`);
+  }
+  return raw as OmrEngine;
 }
 
 const INPUT_QUALITIES = ["synthetic", "standard", "poor"];
@@ -168,18 +181,21 @@ export async function createScoreWithUploadUrl(
 export async function enqueueTranscription(
   scoreId: string,
   userId: string,
+  rawEngine: unknown,
   rawOptions: unknown
 ): Promise<Attempt> {
   const score = await getScoreForUser(scoreId, userId);
   if (!score) throw new NotFoundError("score not found");
 
+  const engine = validateEngine(rawEngine);
   const options = validateOptions(rawOptions);
-  const attempt = await createAttempt({ scoreId: score.id, options });
+  const attempt = await createAttempt({ scoreId: score.id, engine, options });
 
   const data: TranscriptionJobData = {
     scoreId: score.id,
     attemptId: attempt.id,
     sourceKey: score.sourceKey,
+    engine,
     options,
   };
   const job = await transcriptionQueue.add(TRANSCRIBE_JOB, data, {

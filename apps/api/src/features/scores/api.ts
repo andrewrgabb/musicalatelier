@@ -44,6 +44,7 @@ scoresRouter.post("/:id/uploaded", async (req, res, next) => {
     const attempt = await enqueueTranscription(
       req.params.id,
       req.user!.id,
+      req.body?.engine,
       req.body?.options
     );
     res.status(202).json({ scoreId: req.params.id, attemptId: attempt.id, status: attempt.status });
@@ -57,6 +58,7 @@ scoresRouter.post("/:id/reprocess", async (req, res, next) => {
     const attempt = await enqueueTranscription(
       req.params.id,
       req.user!.id,
+      req.body?.engine,
       req.body?.options
     );
     res.status(202).json({ scoreId: req.params.id, attemptId: attempt.id, status: attempt.status });

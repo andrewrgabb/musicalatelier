@@ -44,32 +44,38 @@ source of truth even if Redis is cleared.
 
 Files:
 - `worker.py` — the job processor + BullMQ worker loop.
-- `transcribe/__init__.py` — the engine adapter (re-exports the Audiveris engine).
+- `transcribe/__init__.py` — the engine adapter; dispatches on the chosen engine.
 - `transcribe/audiveris_engine.py` — runs Audiveris and returns the MusicXML.
+- `transcribe/homr_engine.py` — runs homr and returns the MusicXML.
 - `transcribe/midi.py` — converts MusicXML → MIDI (music21).
 - `storage.py` — boto3 S3 download/upload.
 - `db.py` — asyncpg writer mirroring status into the `attempts` row.
 - `contract.py` — the Python mirror of the job contract.
 
-## The engine: Audiveris
+## Two engines, chosen per upload
 
-- **What it is:** a mature Java OMR application. It runs headless from the command
-  line, handles **PDFs and images** natively, and does well on dense, multi-staff
-  printed scores.
-- **How we call it:** `audiveris_engine.py` runs the batch CLI
-  `Audiveris [-constant …] -batch -export -output <dir> -- <input>` and reads the
-  result back. Audiveris exports **compressed MusicXML** (a `.mxl`, a zip
-  containing the `.xml`), so the adapter unzips it and returns the inner XML.
-- **What it needs:** a Java runtime, the Audiveris distribution, and Tesseract OCR
-  language data. In production the worker Docker image bakes all three
-  (build-from-source stage + JRE + `tesseract-ocr-eng`) and sets `AUDIVERIS_CMD`
-  / `TESSDATA_PREFIX` for you.
-- **License:** Audiveris is **AGPL-3.0** — the network-use clause matters for a
-  hosted service.
+The engine lives behind a `transcribe(engine, input_path, options) -> MusicXML`
+boundary (`transcribe/`). The user picks the engine **per upload / re-process**
+in the UI (it's recorded on the attempt), so the same source can be tried both
+ways and compared.
 
-The engine lives behind a `transcribe(input_path, options) -> MusicXML` boundary
-(`transcribe/`). To swap in a different engine (oemer, a vision LLM, …), drop in a
-module exposing the same function and re-export it from `transcribe/__init__.py`.
+**Audiveris** — a mature Java OMR app. Runs headless, handles **PDFs and images**
+natively, strong on dense multi-staff printed scores, and exposes tunable
+options. Stricter: it rejects images whose staff lines are too small (the adapter
+auto-upscales small images and retries — see below). Needs a Java runtime, the
+Audiveris distribution, and Tesseract data (the Docker image bakes all three and
+sets `AUDIVERIS_CMD` / `TESSDATA_PREFIX`). `audiveris_engine.py` runs
+`Audiveris [-constant …] -batch -export -output <dir> -- <input>` and unzips the
+compressed `.mxl` it emits. **AGPL-3.0.**
+
+**homr** — an ONNX/Python engine (no PyTorch). More tolerant of low-res / odd
+images and lighter to run, but **images only** (no PDF) and no tunable options.
+`homr_engine.py` runs the `homr` CLI and reads back the MusicXML. Model weights
+download on first run (baked into the image in prod). **AGPL-3.0.**
+
+To add a third engine (oemer, a vision LLM, …), drop in a module exposing
+`transcribe(input_path, options) -> str` and add a branch to the dispatcher in
+`transcribe/__init__.py`.
 
 ### Transcription options
 
@@ -103,6 +109,9 @@ genuinely hard. Accuracy varies and results often need post-editing. The options
 above (and re-processing with different settings) let you tune for your inputs.
 
 ## Running it locally (macOS)
+
+**homr** needs no extra install — `uv sync` pulls it and the model weights
+download on first use. To use the **Audiveris** engine locally as well:
 
 1. Install Tesseract (provides `eng.traineddata`):
    ```bash

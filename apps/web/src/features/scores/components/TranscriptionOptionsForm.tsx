@@ -6,7 +6,7 @@
  * Select fields offer a "Default" choice (leaves the field unset → Audiveris
  * default). Switches are explicit booleans initialised to Audiveris's defaults.
  */
-import type { TranscriptionOptions } from "@/features/scores/apis/scores";
+import type { OmrEngine, TranscriptionOptions } from "@/features/scores/apis/scores";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -50,10 +50,14 @@ const LANGUAGES: { value: string; label: string }[] = [
 ];
 
 export function TranscriptionOptionsForm({
+  engine,
+  onEngineChange,
   value,
   onChange,
   disabled,
 }: {
+  engine: OmrEngine;
+  onEngineChange: (next: OmrEngine) => void;
   value: TranscriptionOptions;
   onChange: (next: TranscriptionOptions) => void;
   disabled?: boolean;
@@ -65,13 +69,38 @@ export function TranscriptionOptionsForm({
     onChange({ ...value, switches: { ...value.switches, [key]: on } });
   }
 
+  // homr has no tunable options, so disable the Audiveris controls when it's chosen.
+  const optsDisabled = disabled || engine === "homr";
+
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="opt-engine">Engine</Label>
+        <Select
+          disabled={disabled}
+          value={engine}
+          onValueChange={(v) => onEngineChange(v as OmrEngine)}
+        >
+          <SelectTrigger id="opt-engine">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="audiveris">Audiveris (printed scores, PDFs, tunable)</SelectItem>
+            <SelectItem value="homr">homr (tolerant of low-res, no options)</SelectItem>
+          </SelectContent>
+        </Select>
+        {engine === "homr" && (
+          <p className="text-xs text-muted-foreground">
+            homr has no options — it transcribes with its built-in model.
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="opt-quality">Input quality</Label>
           <Select
-            disabled={disabled}
+            disabled={optsDisabled}
             value={value.inputQuality ?? DEFAULT}
             onValueChange={(v) =>
               set({ inputQuality: v === DEFAULT ? undefined : (v as TranscriptionOptions["inputQuality"]) })
@@ -92,7 +121,7 @@ export function TranscriptionOptionsForm({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="opt-lang">OCR language</Label>
           <Select
-            disabled={disabled}
+            disabled={optsDisabled}
             value={value.ocrLanguage ?? DEFAULT}
             onValueChange={(v) => set({ ocrLanguage: v === DEFAULT ? undefined : v })}
           >
@@ -113,7 +142,7 @@ export function TranscriptionOptionsForm({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="opt-binz">Binarization</Label>
           <Select
-            disabled={disabled}
+            disabled={optsDisabled}
             value={value.binarization ?? DEFAULT}
             onValueChange={(v) =>
               set({ binarization: v === DEFAULT ? undefined : (v as TranscriptionOptions["binarization"]) })
@@ -138,7 +167,7 @@ export function TranscriptionOptionsForm({
               type="number"
               min={0}
               max={255}
-              disabled={disabled}
+              disabled={optsDisabled}
               placeholder="e.g. 140"
               value={value.binarizationThreshold ?? ""}
               onChange={(e) =>
@@ -162,7 +191,7 @@ export function TranscriptionOptionsForm({
             >
               <span>{s.label}</span>
               <Switch
-                disabled={disabled}
+                disabled={optsDisabled}
                 checked={value.switches?.[s.key] ?? false}
                 onCheckedChange={(on) => setSwitch(s.key, on)}
               />
