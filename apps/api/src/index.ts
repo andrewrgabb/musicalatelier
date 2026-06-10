@@ -15,6 +15,7 @@ import { redisHealthy } from "./lib/redis.js";
 import { dbHealthy } from "./lib/prisma.js";
 import { requireAuth } from "./lib/auth/middleware.js";
 import { HttpError } from "./lib/http-errors.js";
+import { requestLogger } from "./lib/request-logger.js";
 import { scoresRouter } from "./features/scores/api.js";
 import {
   bullBoardBasePath,
@@ -23,6 +24,9 @@ import {
 } from "./lib/bullboard.js";
 
 const app = express();
+
+// Log every request (one line, after it finishes).
+app.use(requestLogger);
 
 // Allow the SPA's origin to call the API, and send cookies/credentials.
 app.use(cors({ origin: env.appOrigins, credentials: true }));
