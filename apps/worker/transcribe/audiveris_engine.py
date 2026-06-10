@@ -163,14 +163,28 @@ def transcribe(input_path: str, options: dict | None = None) -> str:
             text=True,
             timeout=int(os.environ.get("AUDIVERIS_TIMEOUT_SECONDS", "600")),
         )
-        if proc.returncode != 0:
-            # Surface the tail of stderr so the failure is diagnosable in the
-            # attempts row / logs.
-            raise RuntimeError(
-                f"Audiveris failed (exit {proc.returncode}): {proc.stderr[-1500:]}"
-            )
+        # Audiveris logs everything to stdout. Keep the tail around so any
+        # failure (or a clean exit that produced nothing) is diagnosable.
+        log_tail = ((proc.stdout or "") + (proc.stderr or ""))[-2000:]
 
-        return _find_output(out_dir)
+        if proc.returncode != 0:
+            raise RuntimeError(f"Audiveris failed (exit {proc.returncode}): {log_tail}")
+
+        try:
+            return _find_output(out_dir)
+        except RuntimeError as err:
+            # Exit 0 but no MusicXML — usually no staves were found / recognition
+            # produced nothing. Give a friendly hint for the common case (image
+            # too low-res for staff detection), then surface Audiveris's own log.
+            low = log_tail.lower()
+            if "interline" in low or "resolution is too low" in low or "flagged as invalid" in low:
+                hint = (
+                    "Audiveris couldn't detect a staff — the image resolution looks "
+                    "too low. Use a clearer scan/photo (around 300 DPI)."
+                )
+            else:
+                hint = "Audiveris completed but exported no MusicXML."
+            raise RuntimeError(f"{hint} Audiveris log:\n{log_tail}") from err
     finally:
         # Audiveris also drops a .omr project file in here; clean the whole dir.
         shutil.rmtree(out_dir, ignore_errors=True)
