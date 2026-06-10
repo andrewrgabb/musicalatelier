@@ -274,3 +274,38 @@ it; kept simple here).
 
 **Optional follow-ups:** Clerk production instance; slim the API image (multi-stage
 prod prune); `fly scale count 0 -a musicalatelier-worker` between demos to save cost.
+
+---
+
+## Post-8 — Audiveris as a selectable OMR engine (branch `feat/audiveris-engine`)
+
+Evaluating **Audiveris** (Java + Tesseract OMR) as an alternative to homr. The
+worker's `transcribe(input_path) -> MusicXML` boundary absorbs the swap, so only
+the worker changed.
+
+**Built:**
+- `transcribe/__init__.py` — now a tiny dispatcher: reads `OMR_ENGINE`
+  (`homr` default | `audiveris`) and **lazily** imports the matching engine.
+- `transcribe/audiveris_engine.py` — drives the batch CLI
+  `Audiveris -batch -export -output <dir> -- <input>`, then unzips the compressed
+  `.mxl` it emits (a zip; reads the rootfile named by `META-INF/container.xml`)
+  and returns the inner MusicXML. Honors `AUDIVERIS_CMD` / `AUDIVERIS_TIMEOUT_SECONDS`.
+- `apps/worker/Dockerfile` — multi-stage: a Java-25 stage builds Audiveris
+  `5.10.2` from source (`./gradlew installDist`); the runtime stage adds a JRE +
+  `tesseract-ocr-eng` and the install, keeping homr too. A build-time
+  `Audiveris -help` smoke step fails fast on a broken launcher.
+- `apps/worker/fly.toml` — `OMR_ENGINE=audiveris`, `AUDIVERIS_TIMEOUT_SECONDS`,
+  `TESSDATA_PREFIX`; VM bumped 2 GB → 4 GB (JVM is heavier).
+- Docs/config: `.env.example`, worker `README.md` (incl. macOS local setup),
+  `docs/DEPLOY.md`.
+
+**How to verify (local, the primary path):** install Tesseract + Audiveris on
+macOS, set `OMR_ENGINE=audiveris` + `AUDIVERIS_CMD` in `.env`, `pnpm infra:up`,
+run the worker, and upload an image **and** a PDF through the app — watch
+`queued → processing → completed`, then download/preview the MusicXML. Flip back
+with `OMR_ENGINE=homr` (no code change).
+
+**Notes / to-confirm when building the image:** Audiveris moves fast (master now
+targets JDK 25; we pin tag `5.10.2`). The exact `installDist` output path and the
+Debian `TESSDATA_PREFIX` location should be re-verified at image-build time — the
+in-build smoke step guards this. Audiveris is **AGPL-3.0** (same as homr).

@@ -3,7 +3,7 @@
 Consumes the BullMQ `transcription` queue and runs the OMR pipeline:
   1. mark the score `processing`
   2. download the uploaded source from storage
-  3. run the transcription engine (stub now; homr in Phase 6) behind transcribe()
+  3. run the transcription engine (homr or Audiveris, set by OMR_ENGINE) behind transcribe()
   4. report progress (BullMQ progress events + the scores row)
   5. upload the MusicXML and mark the score `completed`
   6. on any error, mark the score `failed` and let BullMQ record the failure
@@ -60,9 +60,9 @@ async def process(job, job_token):
             input_path = tmp.name
 
         try:
-            # 2) coarse staged progress. homr runs as one opaque step, so we
-            #    nudge the bar to 75% before it starts and 100% when it returns.
-            #    (A finer-grained engine could report real progress here.)
+            # 2) coarse staged progress. The engine runs as one opaque step, so
+            #    we nudge the bar to 75% before it starts and 100% when it
+            #    returns. (A finer-grained engine could report real progress.)
             for pct in (25, 50, 75):
                 await asyncio.sleep(1)
                 await job.updateProgress(pct)

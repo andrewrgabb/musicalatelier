@@ -202,3 +202,12 @@ allows the same origin (step 1.4).
 - **homr models** are baked into the worker image, so the first prod job is fast
   (no cold download). A GPU machine (homr's `Dockerfile.gpu`) would speed
   inference if you ever need it.
+
+- **OMR engine:** the worker can run **homr** (default) or **Audiveris**, chosen
+  by the `OMR_ENGINE` env var in `apps/worker/fly.toml` (no secret, no code
+  change — flip and redeploy, or set it as a Fly env). The worker image ships
+  both: Audiveris is built from source (a Java 25 stage) and bundled with a JRE +
+  `tesseract-ocr-eng`. That makes the image noticeably larger and the build
+  slower, and Audiveris (a JVM, heavier on multi-page PDFs) wants more RAM — the
+  Audiveris config bumps the worker VM to **4 GB**. To run homr instead, set
+  `OMR_ENGINE=homr` and you can drop back to a 2 GB VM.
