@@ -14,6 +14,7 @@ import { env } from "./lib/env.js";
 import { redisHealthy } from "./lib/redis.js";
 import { dbHealthy } from "./lib/prisma.js";
 import { requireAuth } from "./lib/auth/middleware.js";
+import { HttpError } from "./lib/http-errors.js";
 import { scoresRouter } from "./features/scores/api.js";
 import {
   bullBoardBasePath,
@@ -56,7 +57,9 @@ app.use("/scores", scoresRouter);
 // Live queue dashboard (guarded by Basic auth when configured).
 app.use(bullBoardBasePath, bullBoardGuard, bullBoardRouter);
 
-// Catch-all JSON error handler so handlers can just `next(err)`.
+// Catch-all JSON error handler so route handlers can just `next(err)`. Domain
+// errors thrown by the service layer carry their own HTTP status; anything else
+// is an unexpected 500.
 app.use(
   (
     err: unknown,
@@ -64,6 +67,10 @@ app.use(
     res: express.Response,
     _next: express.NextFunction
   ) => {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     console.error("[api] unhandled error:", err);
     res.status(500).json({ error: "internal server error" });
   }

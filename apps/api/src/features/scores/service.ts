@@ -9,6 +9,7 @@ import {
 } from "@musical-atelier/contracts";
 import { presignDownload, presignUpload } from "../../lib/storage.js";
 import { transcriptionQueue } from "../../lib/queue.js";
+import { BadRequestError, NotFoundError } from "../../lib/http-errors.js";
 import {
   createScore,
   getScoreForUser,
@@ -16,6 +17,15 @@ import {
   setScoreJobId,
   setScoreSourceKey,
 } from "./db.js";
+
+const VALID_SOURCE_TYPES: SourceType[] = ["image", "pdf"];
+
+function isSourceType(value: unknown): value is SourceType {
+  return (
+    typeof value === "string" &&
+    (VALID_SOURCE_TYPES as string[]).includes(value)
+  );
+}
 
 // Map a MIME type to a file extension. The browser tells us the real content
 // type of the file it's about to upload; we sign the presigned PUT with that
@@ -39,18 +49,27 @@ function sourceKeyFor(userId: string, scoreId: string, ext: string) {
 }
 
 /**
- * Step 1: create the score row and hand back a presigned URL the browser uses
- * to upload the file directly to storage. Nothing is queued yet.
+ * Step 1: validate the request, create the score row, and hand back a presigned
+ * URL the browser uses to upload the file directly to storage. Nothing is
+ * queued yet.
  *
- * `contentType` is the file's real MIME type, supplied by the browser; we sign
- * the URL with it so the browser's PUT (which must send the same Content-Type)
- * matches the signature.
+ * `sourceType` / `contentType` arrive untrusted from the request body, so we
+ * validate them here (business rule) and throw BadRequestError if invalid.
+ * `contentType` is the file's real MIME type; we sign the URL with it so the
+ * browser's PUT (which must send the same Content-Type) matches the signature.
  */
 export async function createScoreWithUploadUrl(
   userId: string,
-  sourceType: SourceType,
-  contentType: string
+  sourceType: unknown,
+  contentType: unknown
 ): Promise<{ score: Score; uploadUrl: string }> {
+  if (!isSourceType(sourceType)) {
+    throw new BadRequestError("sourceType must be 'image' or 'pdf'");
+  }
+  if (typeof contentType !== "string" || contentType.length === 0) {
+    throw new BadRequestError("contentType (the file's MIME type) is required");
+  }
+
   const ext = extFor(contentType, sourceType);
 
   // Create first so we have the id to build a stable, collision-free key,
@@ -66,10 +85,17 @@ export async function createScoreWithUploadUrl(
 }
 
 /**
- * Step 2: the browser has finished uploading. Enqueue the transcription job and
- * record its id. The worker takes it from here.
+ * Step 2: the browser has finished uploading. Look up the user's score (404 if
+ * it isn't theirs / doesn't exist), enqueue the transcription job with retries,
+ * and record its id. The worker takes it from here. Returns the score.
  */
-export async function enqueueTranscription(score: Score): Promise<void> {
+export async function enqueueTranscriptionForUser(
+  scoreId: string,
+  userId: string
+): Promise<Score> {
+  const score = await getScoreForUser(scoreId, userId);
+  if (!score) throw new NotFoundError("score not found");
+
   const data: TranscriptionJobData = {
     scoreId: score.id,
     sourceKey: score.sourceKey,
@@ -81,14 +107,16 @@ export async function enqueueTranscription(score: Score): Promise<void> {
     removeOnFail: 500,
   });
   await setScoreJobId(score.id, job.id!);
+  return score;
 }
 
 /**
- * Status for one score, plus a presigned download URL if it's completed.
+ * Status for one of the user's scores, plus a presigned download URL if it's
+ * completed. Throws NotFoundError if the score isn't theirs / doesn't exist.
  */
-export async function getScoreStatus(id: string, userId: string) {
-  const score = await getScoreForUser(id, userId);
-  if (!score) return null;
+export async function getScoreStatus(scoreId: string, userId: string) {
+  const score = await getScoreForUser(scoreId, userId);
+  if (!score) throw new NotFoundError("score not found");
   const downloadUrl =
     score.status === "completed" && score.outputKey
       ? await presignDownload(score.outputKey)
@@ -99,5 +127,3 @@ export async function getScoreStatus(id: string, userId: string) {
 export function listScores(userId: string) {
   return listScoresForUser(userId);
 }
-
-export { getScoreForUser };
