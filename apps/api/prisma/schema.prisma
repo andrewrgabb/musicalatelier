@@ -50,7 +50,7 @@ enum SourceType {
   pdf
 }
 
-// The lifecycle of a transcription. Mirrors the ScoreStatus type in
+// The lifecycle of a transcription attempt. Mirrors the ScoreStatus type in
 // packages/contracts. The Postgres row is the user-facing source of truth;
 // BullMQ holds the in-flight job and the worker mirrors progress into here.
 enum ScoreStatus {
@@ -60,7 +60,9 @@ enum ScoreStatus {
   failed
 }
 
-// One uploaded score and its transcription job.
+// One uploaded score = the source file. The actual transcription(s) live in
+// Attempt rows: a score can be (re)processed many times with different options,
+// and we keep every run as a separate attempt so results can be compared.
 model Score {
   id String @id @default(cuid())
 
@@ -72,12 +74,38 @@ model Score {
   sourceKey  String     @map("source_key")
   sourceType SourceType @map("source_type")
 
+  // Every transcription run of this source (newest first when loaded).
+  attempts Attempt[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("scores")
+}
+
+// One transcription run of a score's source. Re-processing creates a new
+// Attempt instead of overwriting, so a score accumulates a version history.
+model Attempt {
+  id String @id @default(cuid())
+
+  // The score (source) this run belongs to.
+  scoreId String @map("score_id")
+  score   Score  @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+
+  // Which OMR engine actually ran ("audiveris" | "homr"). Set by the worker.
+  engine String?
+
+  // The transcription options used for this run (curated set; null = defaults).
+  options Json?
+
   // Lifecycle + progress, mirrored from the worker.
   status   ScoreStatus @default(queued)
   progress Int         @default(0) // 0–100
 
-  // R2/MinIO object key of the generated MusicXML (set on success).
-  outputKey String? @map("output_key")
+  // R2/MinIO object keys of the generated outputs (set on success).
+  outputKey     String? @map("output_key") // MusicXML
+  outputMidiKey String? @map("output_midi_key") // MIDI
 
   // Failure message (set on failure).
   error String?
@@ -88,6 +116,6 @@ model Score {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([userId])
-  @@map("scores")
+  @@index([scoreId])
+  @@map("attempts")
 }

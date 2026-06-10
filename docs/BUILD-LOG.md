@@ -309,3 +309,46 @@ with `OMR_ENGINE=homr` (no code change).
 targets JDK 25; we pin tag `5.10.2`). The exact `installDist` output path and the
 Debian `TESSDATA_PREFIX` location should be re-verified at image-build time — the
 in-build smoke step guards this. Audiveris is **AGPL-3.0** (same as homr).
+
+---
+
+## Post-8 — Options + reprocess (versioned) + MIDI; homr removed (branch `feat/transcription-options-midi`)
+
+Committed to Audiveris, so **homr is removed entirely** (engine module, dep, the
+`OMR_ENGINE` dispatcher, the ONNX model-bake + opencv libs in the Dockerfile, the
+`HOMR_*` env). Audiveris is now the sole engine; the worker image build pins tag
+**5.9.0** to match the constant keys we map (and the macOS install used in dev).
+
+**Data model — Score split into Score + Attempt.** A `scores` row was both the
+source *and* the single run; to keep a history we split it: `Score` (uploaded
+source) + many `Attempt` rows (each run with its own options, status, outputs).
+Migration `20260610120000_split_score_into_attempts` creates `attempts`,
+**backfills one attempt per existing score** (engine `homr`), then drops the moved
+columns — verified locally (9 scores → 9 attempts).
+
+**Built:**
+- Contracts: `TranscriptionOptions` (curated); job data gains `attemptId` +
+  `options`; result gains `outputMidiKey`. Mirrored in `contract.py`.
+- Worker: `audiveris_engine.transcribe(path, options)` maps options to verified
+  `-constant` flags (input quality, binarization + threshold, OCR language, 5
+  processing switches); `transcribe/midi.py` converts MusicXML → MIDI (music21,
+  best-effort); `worker.py`/`db.py` target the attempt, namespace outputs per
+  attempt, and write `output_midi_key`.
+- API: `getScoreForUser`/`listScoresForUser` include attempts; `createAttempt` +
+  `setAttemptJobId`; one `enqueueTranscription` shared by `POST /:id/uploaded`
+  (first run) and new `POST /:id/reprocess`; options validated in the service;
+  `GET /:id` returns attempts with presigned MusicXML + MIDI URLs.
+- Web: per-attempt history in `ScoreCard` (Download MusicXML / MIDI / preview),
+  a **Re-process** dialog, and a curated `TranscriptionOptionsForm` on upload +
+  reprocess (new shadcn `select`/`switch`/`label`/`dialog`/`input`).
+
+**Verified:** contracts/api/web `typecheck` clean; worker `py_compile` clean;
+music21 MIDI smoke (valid `MThd`); Audiveris adapter run **with options** on a
+real sample (constants applied; note count shifted vs defaults, confirming they
+take effect). End-to-end app run is the remaining manual check.
+
+**Constant keys** (verified vs Audiveris 5.9.0 source, format confirmed from
+`run.properties`): `…sheet.Profiles.defaultQuality`,
+`…image.FilterDescriptor.defaultKind`, `…image.GlobalDescriptor.defaultThreshold`,
+`…text.Language.defaultSpecification`, `…sheet.ProcessingSwitches.<switch>`. No
+`dynamics` switch exists in 5.9.0, so it was dropped from the curated set.

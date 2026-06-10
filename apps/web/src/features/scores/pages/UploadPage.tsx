@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CloudUpload, FileMusic, LoaderCircle } from "lucide-react";
+import { CloudUpload, FileMusic, LoaderCircle, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -22,7 +22,12 @@ import {
   markUploaded,
   uploadToStorage,
   type SourceType,
+  type TranscriptionOptions,
 } from "@/features/scores/apis/scores";
+import {
+  TranscriptionOptionsForm,
+  defaultOptions,
+} from "@/features/scores/components/TranscriptionOptionsForm";
 
 function sourceTypeOf(file: File): SourceType {
   return file.type === "application/pdf" ? "pdf" : "image";
@@ -32,6 +37,8 @@ export function UploadPage() {
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [options, setOptions] = useState<TranscriptionOptions>(defaultOptions);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,7 +50,7 @@ export function UploadPage() {
         contentType: file.type || "application/octet-stream",
       });
       await uploadToStorage(uploadUrl, file);
-      await markUploaded(scoreId);
+      await markUploaded(scoreId, options);
       toast.success("Uploaded — transcription started");
       navigate("/scores");
     } catch (err) {
@@ -90,6 +97,30 @@ export function UploadPage() {
               disabled={busy}
             />
           </label>
+
+          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
+            <button
+              type="button"
+              onClick={() => setShowOptions((v) => !v)}
+              className="flex cursor-pointer items-center justify-between text-sm font-medium"
+            >
+              <span className="flex items-center gap-2">
+                <Settings2 className="size-4 text-muted-foreground" />
+                Transcription options
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {showOptions ? "Hide" : "Customize"}
+              </span>
+            </button>
+            {showOptions && (
+              <TranscriptionOptionsForm
+                value={options}
+                onChange={setOptions}
+                disabled={busy}
+              />
+            )}
+          </div>
+
           <Button type="submit" disabled={!file || busy} className="w-full">
             {busy ? (
               <>

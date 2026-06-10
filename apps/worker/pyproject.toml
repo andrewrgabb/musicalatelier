@@ -2,23 +2,20 @@
 name = "musical-atelier-worker"
 version = "0.1.0"
 description = "Python worker — consumes the BullMQ transcription queue and runs the OMR engine."
-# Pinned to 3.12: homr 0.6.2 requires Python <3.13, and onnxruntime/opencv have
-# the best wheel coverage here.
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 dependencies = [
     # The Python port of BullMQ. Interoperable with the Node producer because
     # both speak the same Redis Lua scripts on the same queue.
     "bullmq>=2.0.0",
     # Loads the repo-root .env in local dev (prod uses real env vars).
     "python-dotenv>=1.0.0",
-    # S3 client for downloading the source and uploading the MusicXML
+    # S3 client for downloading the source and uploading the outputs
     # (points at MinIO locally, R2 in prod).
     "boto3>=1.34.0",
-    # Async Postgres client — the worker mirrors job status into the scores row.
+    # Async Postgres client — the worker mirrors job status into the attempts row.
     "asyncpg>=0.29.0",
-    # The shipped OMR engine. ONNX-based (no PyTorch); downloads model weights
-    # on first run. Invoked via its `homr` CLI behind the transcribe() adapter.
-    "homr>=0.6.2",
+    # Converts the engine's MusicXML output into a downloadable MIDI file.
+    "music21>=9.1.0",
 ]
 
 [tool.uv]

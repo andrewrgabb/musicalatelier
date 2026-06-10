@@ -6,7 +6,7 @@ How to take Musical Atelier from local to production. The architecture in prod:
 |---|---|---|
 | Frontend (SPA) | **Vercel** (global CDN) | root domain `<domain>` |
 | API (Node) | **Fly.io**, `syd` | `api.<domain>` |
-| Worker (Python + homr) | **Fly.io**, `syd` | no public port |
+| Worker (Python + Audiveris) | **Fly.io**, `syd` | no public port |
 | Postgres | **Fly Managed Postgres**, `syd` | private network |
 | Redis (BullMQ) | **Fly/Upstash Redis**, `syd` | private network |
 | Object storage | **Cloudflare R2** | global, CDN-fronted |
@@ -185,8 +185,9 @@ allows the same origin (step 1.4).
 
 1. `https://api.<domain>/healthz` → `{"ok":true,"checks":{"redis":true,"db":true}}`.
 2. Open `https://<domain>` → Clerk sign-in → sign up.
-3. Upload a sheet-music image → it uploads straight to R2, the worker runs homr,
-   status goes `queued → processing → completed`, and the preview renders.
+3. Upload a sheet-music image → it uploads straight to R2, the worker runs
+   Audiveris, status goes `queued → processing → completed`, and the preview
+   renders (with a MIDI download too).
 4. `fly logs` on both apps shows the job flowing through.
 
 ---
@@ -194,20 +195,15 @@ allows the same origin (step 1.4).
 ## Notes
 
 - **Cost shape:** Fly API + worker + Postgres + Redis are the bulk (the worker's
-  2 GB VM dominates); R2/Vercel/Clerk sit in free tiers for a demo. Verify
+  4 GB VM dominates); R2/Vercel/Clerk sit in free tiers for a demo. Verify
   current rates.
 - **Scaling:** the single-region `syd` compute tier is the scale point
   (`fly scale count/​vm`); add worker machines to process more jobs in parallel.
   Frontend, storage, and auth already scale globally.
-- **homr models** are baked into the worker image, so the first prod job is fast
-  (no cold download). A GPU machine (homr's `Dockerfile.gpu`) would speed
-  inference if you ever need it.
 
-- **OMR engine:** the worker can run **homr** (default) or **Audiveris**, chosen
-  by the `OMR_ENGINE` env var in `apps/worker/fly.toml` (no secret, no code
-  change — flip and redeploy, or set it as a Fly env). The worker image ships
-  both: Audiveris is built from source (a Java 25 stage) and bundled with a JRE +
-  `tesseract-ocr-eng`. That makes the image noticeably larger and the build
-  slower, and Audiveris (a JVM, heavier on multi-page PDFs) wants more RAM — the
-  Audiveris config bumps the worker VM to **4 GB**. To run homr instead, set
-  `OMR_ENGINE=homr` and you can drop back to a 2 GB VM.
+- **OMR engine (Audiveris):** the worker image builds Audiveris from source (a
+  Java 25 stage) and bundles it with a JRE + `tesseract-ocr-eng`. That makes the
+  image larger and the build slower, and Audiveris (a JVM, heavier on multi-page
+  PDFs) wants real RAM — hence the **4 GB** worker VM (tune in
+  `apps/worker/fly.toml`). The worker also converts each result to MIDI, so
+  outputs are MusicXML + MIDI.

@@ -11,13 +11,16 @@ TRANSCRIPTION_QUEUE = "transcription"
 # The (single) job name on that queue.
 TRANSCRIBE_JOB = "transcribe"
 
-# Lifecycle states mirrored into the Postgres `scores.status` column.
+# Lifecycle states mirrored into the Postgres `attempts.status` column.
 STATUS_QUEUED = "queued"
 STATUS_PROCESSING = "processing"
 STATUS_COMPLETED = "completed"
 STATUS_FAILED = "failed"
 
+# The OMR engine this worker runs (recorded on the attempt row).
+ENGINE_NAME = "audiveris"
+
 # Job data shape (for reference; Python reads these keys off job.data):
-#   { "scoreId": str, "sourceKey": str }
+#   { "scoreId": str, "attemptId": str, "sourceKey": str, "options": dict | None }
 # Success return shape:
-#   { "outputKey": str }
+#   { "outputKey": str, "outputMidiKey": str | None }

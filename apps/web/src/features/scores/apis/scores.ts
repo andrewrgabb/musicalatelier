@@ -1,27 +1,48 @@
 /**
  * Typed calls to the score endpoints, plus the direct-to-storage upload.
  * Components import these instead of calling `api()` with raw strings.
+ *
+ * A score is the uploaded source; each transcription run is an Attempt. The
+ * list endpoint returns attempts without URLs; the detail endpoint adds
+ * presigned download URLs (MusicXML + MIDI) for completed attempts.
  */
-import type { ScoreStatus } from "@musical-atelier/contracts";
+import type {
+  ScoreStatus,
+  TranscriptionOptions,
+} from "@musical-atelier/contracts";
 import { api } from "../../../lib/api";
 
 export type SourceType = "image" | "pdf";
+export type { TranscriptionOptions };
+
+export interface Attempt {
+  id: string;
+  engine: string | null;
+  options: TranscriptionOptions | null;
+  status: ScoreStatus;
+  progress: number;
+  outputKey: string | null;
+  outputMidiKey: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface AttemptWithUrls extends Attempt {
+  /** Presigned GET for the MusicXML, present only when completed. */
+  downloadUrl: string | null;
+  /** Presigned GET for the MIDI, present only when completed + converted. */
+  midiUrl: string | null;
+}
 
 export interface Score {
   id: string;
   sourceType: SourceType;
-  status: ScoreStatus;
-  progress: number;
-  outputKey: string | null;
-  error: string | null;
-  jobId: string | null;
   createdAt: string;
-  updatedAt: string;
+  attempts: Attempt[];
 }
 
-export interface ScoreStatusResponse extends Score {
-  /** Presigned GET for the MusicXML, present only when completed. */
-  downloadUrl: string | null;
+export interface ScoreDetail extends Omit<Score, "attempts"> {
+  attempts: AttemptWithUrls[];
 }
 
 /** Step 1: create the score row and get a presigned upload URL. */
@@ -46,11 +67,19 @@ export async function uploadToStorage(uploadUrl: string, file: File) {
   if (!res.ok) throw new Error(`upload failed: HTTP ${res.status}`);
 }
 
-/** Step 3: tell the API the upload is done, which enqueues the job. */
-export function markUploaded(scoreId: string) {
-  return api<{ scoreId: string; status: ScoreStatus }>(
+/** Step 3: tell the API the upload is done, which starts the first attempt. */
+export function markUploaded(scoreId: string, options?: TranscriptionOptions) {
+  return api<{ scoreId: string; attemptId: string; status: ScoreStatus }>(
     `/scores/${scoreId}/uploaded`,
-    { method: "POST" }
+    { method: "POST", body: { options } }
+  );
+}
+
+/** Re-run an already-uploaded score with (possibly different) options. */
+export function reprocessScore(scoreId: string, options?: TranscriptionOptions) {
+  return api<{ scoreId: string; attemptId: string; status: ScoreStatus }>(
+    `/scores/${scoreId}/reprocess`,
+    { method: "POST", body: { options } }
   );
 }
 
@@ -59,5 +88,5 @@ export function listScores() {
 }
 
 export function getScore(id: string) {
-  return api<ScoreStatusResponse>(`/scores/${id}`);
+  return api<ScoreDetail>(`/scores/${id}`);
 }
