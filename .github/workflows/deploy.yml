@@ -1,0 +1,76 @@
+# Deploy on merge to main: API → (worker, web).
+#
+# The API goes first because its release step runs `prisma migrate deploy`; the
+# worker writes to tables that migration creates, and the web app expects the new
+# API shape — so both wait for the API job to finish.
+#
+# Vercel's own git auto-deploy is turned off (apps/web/vercel.json
+# git.deploymentEnabled=false) so the web app deploys here too, in order.
+#
+# Required GitHub repository secrets (Settings → Secrets and variables → Actions):
+#   FLY_API_TOKEN     — `fly tokens create deploy` (a deploy token; scope to the
+#                       apps if you prefer, or an org token covering both).
+#   VERCEL_TOKEN      — Vercel account token (vercel.com/account/tokens).
+#   VERCEL_ORG_ID     — from apps/web/.vercel/project.json after `vercel link`.
+#   VERCEL_PROJECT_ID — likewise.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # lets you re-run a deploy manually from the Actions tab
+
+# Don't let two deploys of the same ref overlap.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: API (Fly)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fly-deploy # serialize Fly deploys (api + worker share a builder)
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: fly deploy api
+        run: flyctl deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  worker:
+    name: Worker (Fly)
+    needs: api # migration must have run; worker writes to the new tables
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: fly deploy worker
+        run: flyctl deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  web:
+    name: Web (Vercel)
+    needs: api # frontend expects the new API shape — don't ship it first
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
