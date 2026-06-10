@@ -274,3 +274,117 @@ it; kept simple here).
 
 **Optional follow-ups:** Clerk production instance; slim the API image (multi-stage
 prod prune); `fly scale count 0 -a musicalatelier-worker` between demos to save cost.
+
+---
+
+## Post-8 — Audiveris as a selectable OMR engine (branch `feat/audiveris-engine`)
+
+Evaluating **Audiveris** (Java + Tesseract OMR) as an alternative to homr. The
+worker's `transcribe(input_path) -> MusicXML` boundary absorbs the swap, so only
+the worker changed.
+
+**Built:**
+- `transcribe/__init__.py` — now a tiny dispatcher: reads `OMR_ENGINE`
+  (`homr` default | `audiveris`) and **lazily** imports the matching engine.
+- `transcribe/audiveris_engine.py` — drives the batch CLI
+  `Audiveris -batch -export -output <dir> -- <input>`, then unzips the compressed
+  `.mxl` it emits (a zip; reads the rootfile named by `META-INF/container.xml`)
+  and returns the inner MusicXML. Honors `AUDIVERIS_CMD` / `AUDIVERIS_TIMEOUT_SECONDS`.
+- `apps/worker/Dockerfile` — multi-stage: a Java-25 stage builds Audiveris
+  `5.10.2` from source (`./gradlew installDist`); the runtime stage adds a JRE +
+  `tesseract-ocr-eng` and the install, keeping homr too. A build-time
+  `Audiveris -help` smoke step fails fast on a broken launcher.
+- `apps/worker/fly.toml` — `OMR_ENGINE=audiveris`, `AUDIVERIS_TIMEOUT_SECONDS`,
+  `TESSDATA_PREFIX`; VM bumped 2 GB → 4 GB (JVM is heavier).
+- Docs/config: `.env.example`, worker `README.md` (incl. macOS local setup),
+  `docs/DEPLOY.md`.
+
+**How to verify (local, the primary path):** install Tesseract + Audiveris on
+macOS, set `OMR_ENGINE=audiveris` + `AUDIVERIS_CMD` in `.env`, `pnpm infra:up`,
+run the worker, and upload an image **and** a PDF through the app — watch
+`queued → processing → completed`, then download/preview the MusicXML. Flip back
+with `OMR_ENGINE=homr` (no code change).
+
+**Notes / to-confirm when building the image:** Audiveris moves fast (master now
+targets JDK 25; we pin tag `5.10.2`). The exact `installDist` output path and the
+Debian `TESSDATA_PREFIX` location should be re-verified at image-build time — the
+in-build smoke step guards this. Audiveris is **AGPL-3.0** (same as homr).
+
+---
+
+## Post-8 — Options + reprocess (versioned) + MIDI; homr removed (branch `feat/transcription-options-midi`)
+
+Committed to Audiveris, so **homr is removed entirely** (engine module, dep, the
+`OMR_ENGINE` dispatcher, the ONNX model-bake + opencv libs in the Dockerfile, the
+`HOMR_*` env). Audiveris is now the sole engine; the worker image build pins tag
+**5.9.0** to match the constant keys we map (and the macOS install used in dev).
+
+**Data model — Score split into Score + Attempt.** A `scores` row was both the
+source *and* the single run; to keep a history we split it: `Score` (uploaded
+source) + many `Attempt` rows (each run with its own options, status, outputs).
+Migration `20260610120000_split_score_into_attempts` creates `attempts`,
+**backfills one attempt per existing score** (engine `homr`), then drops the moved
+columns — verified locally (9 scores → 9 attempts).
+
+**Built:**
+- Contracts: `TranscriptionOptions` (curated); job data gains `attemptId` +
+  `options`; result gains `outputMidiKey`. Mirrored in `contract.py`.
+- Worker: `audiveris_engine.transcribe(path, options)` maps options to verified
+  `-constant` flags (input quality, binarization + threshold, OCR language, 5
+  processing switches); `transcribe/midi.py` converts MusicXML → MIDI (music21,
+  best-effort); `worker.py`/`db.py` target the attempt, namespace outputs per
+  attempt, and write `output_midi_key`.
+- API: `getScoreForUser`/`listScoresForUser` include attempts; `createAttempt` +
+  `setAttemptJobId`; one `enqueueTranscription` shared by `POST /:id/uploaded`
+  (first run) and new `POST /:id/reprocess`; options validated in the service;
+  `GET /:id` returns attempts with presigned MusicXML + MIDI URLs.
+- Web: per-attempt history in `ScoreCard` (Download MusicXML / MIDI / preview),
+  a **Re-process** dialog, and a curated `TranscriptionOptionsForm` on upload +
+  reprocess (new shadcn `select`/`switch`/`label`/`dialog`/`input`).
+
+**Verified:** contracts/api/web `typecheck` clean; worker `py_compile` clean;
+music21 MIDI smoke (valid `MThd`); Audiveris adapter run **with options** on a
+real sample (constants applied; note count shifted vs defaults, confirming they
+take effect). End-to-end app run is the remaining manual check.
+
+**Constant keys** (verified vs Audiveris 5.9.0 source, format confirmed from
+`run.properties`): `…sheet.Profiles.defaultQuality`,
+`…image.FilterDescriptor.defaultKind`, `…image.GlobalDescriptor.defaultThreshold`,
+`…text.Language.defaultSpecification`, `…sheet.ProcessingSwitches.<switch>`. No
+`dynamics` switch exists in 5.9.0, so it was dropped from the curated set.
+
+---
+
+## Post-8 — homr restored as a user-selectable engine (branch `feat/transcription-options-midi`)
+
+After evaluating Audiveris on real inputs we wanted homr back too — not as the
+sole engine, but as a **per-upload choice**. Audiveris is stronger on clean
+printed scores/PDFs and is tunable; homr is more tolerant of low-res/odd images.
+The `attempts.engine` column already records which engine ran, so engine becomes
+a per-attempt selection rather than a server setting.
+
+**Built:**
+- `transcribe/__init__.py` is again a dispatcher: `transcribe(engine, path,
+  options)` lazily imports `audiveris_engine` or `homr_engine`. homr restored
+  (options arg accepted + ignored).
+- Contracts: `OmrEngine` type + `OMR_ENGINES`; `engine` added to the job data.
+- API: `enqueueTranscription` validates `engine` (default `audiveris`), stores it
+  on the attempt, and puts it on the job; `POST /:id/uploaded` and `/reprocess`
+  read `engine` from the body.
+- Worker: reads `engine` off the job, dispatches, and records it via
+  `set_processing`.
+- Web: an **Engine** select in `TranscriptionOptionsForm` (Audiveris | homr); the
+  Audiveris-only options gray out when homr is chosen. Threaded through upload +
+  re-process; each attempt shows the engine it used.
+- Packaging: `homr` back in `pyproject.toml` (Python pinned `<3.13` again),
+  Dockerfile re-adds the opencv/onnx libs + the model-weight bake, `fly.toml`
+  re-adds `HOMR_TIMEOUT_SECONDS`. The image carries both engines (large again).
+
+**Also in this branch:** auto-upscale + retry for low-res images (Audiveris),
+`UnrecoverableError` so deterministic bad-input failures don't retry, View
+original, and Delete score.
+
+**Verified:** contracts/api/web typecheck; worker `py_compile`; dispatcher routes
+both engines and errors clearly on an unknown one; Audiveris path proven on a real
+sample (incl. auto-upscale). homr runtime not re-smoked locally (weights download
+on first run) — it's the original shipped engine, unchanged besides the signature.

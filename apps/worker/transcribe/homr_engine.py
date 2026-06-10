@@ -28,8 +28,12 @@ def _homr_executable() -> str:
     return exe
 
 
-def transcribe(input_path: str) -> str:
-    """Run homr on `input_path` and return the MusicXML it produces."""
+def transcribe(input_path: str, options: dict | None = None) -> str:
+    """Run homr on `input_path` and return the MusicXML it produces.
+
+    homr has no tunable options, so `options` is accepted (to match the engine
+    adapter signature) and ignored.
+    """
     output_path = os.path.splitext(input_path)[0] + ".musicxml"
 
     proc = subprocess.run(

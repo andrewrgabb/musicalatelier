@@ -5,7 +5,8 @@
 #
 # The worker has NO public service — it consumes the queue and talks to backing
 # services over Fly's private network. It runs continuously (it polls Redis), so
-# there's no auto-stop. homr needs real memory, hence the 2 GB VM.
+# there's no auto-stop. Audiveris (a JVM) on multi-page PDFs wants real memory,
+# hence the 4 GB VM (tune as needed).
 
 app = "musicalatelier-worker"
 primary_region = "syd"
@@ -15,9 +16,12 @@ primary_region = "syd"
 # Non-secret config. Secrets (REDIS_URL, DATABASE_URL/DIRECT_URL, R2_*) are set
 # with `fly secrets set` — see DEPLOY.md.
 [env]
+  AUDIVERIS_TIMEOUT_SECONDS = "600"
   HOMR_TIMEOUT_SECONDS = "600"
+  # Where Tesseract's language data lives in the image (see Dockerfile).
+  TESSDATA_PREFIX = "/usr/share/tesseract-ocr/5/tessdata"
 
 [[vm]]
   cpu_kind = "shared"
   cpus = 2
-  memory = "2048mb"
+  memory = "4096mb"

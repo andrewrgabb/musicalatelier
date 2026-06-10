@@ -8,7 +8,9 @@
  * directly to/from storage. That keeps the API fast, cheap, and stateless.
  */
 import {
+  DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -62,4 +64,33 @@ export function presignDownload(
     new GetObjectCommand({ Bucket: env.r2.bucket, Key: key }),
     { expiresIn }
   );
+}
+
+/**
+ * Delete every object under a key prefix (e.g. all of a score's uploads or
+ * outputs). Lists in pages of 1000 and batch-deletes each page.
+ */
+export async function deletePrefix(prefix: string): Promise<void> {
+  let token: string | undefined;
+  do {
+    const listed = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: env.r2.bucket,
+        Prefix: prefix,
+        ContinuationToken: token,
+      })
+    );
+    const keys = (listed.Contents ?? [])
+      .map((o) => o.Key)
+      .filter((k): k is string => Boolean(k));
+    if (keys.length > 0) {
+      await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: env.r2.bucket,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+    }
+    token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (token);
 }

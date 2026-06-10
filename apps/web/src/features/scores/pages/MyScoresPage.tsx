@@ -77,7 +77,11 @@ export function MyScoresPage() {
 
       <div className="flex flex-col gap-3">
         {scores.map((s) => (
-          <ScoreCard key={s.id} score={s} />
+          <ScoreCard
+            key={s.id}
+            score={s}
+            onDeleted={(id) => setScores((prev) => prev.filter((x) => x.id !== id))}
+          />
         ))}
       </div>
     </section>

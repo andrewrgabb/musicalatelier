@@ -4,16 +4,19 @@
  * (validation, "not found", orchestration) lives in service.ts; domain errors
  * it throws are mapped to status codes by the central error handler.
  *
- *   POST /scores              -> create row + presigned upload URL
- *   POST /scores/:id/uploaded -> file is uploaded; enqueue the transcription
- *   GET  /scores              -> list my scores + status
- *   GET  /scores/:id          -> one score's status (+ download URL if done)
+ *   POST /scores               -> create score (source) + presigned upload URL
+ *   POST /scores/:id/uploaded  -> file is uploaded; start the first attempt
+ *   POST /scores/:id/reprocess -> start another attempt with (new) options
+ *   GET  /scores               -> list my scores + their attempts
+ *   GET  /scores/:id           -> one score + attempts (+ source/download URLs)
+ *   DELETE /scores/:id         -> delete a score (its files + attempts)
  */
 import { Router } from "express";
 import { requireAuth } from "../../lib/auth/middleware.js";
 import {
   createScoreWithUploadUrl,
-  enqueueTranscriptionForUser,
+  deleteScoreForUser,
+  enqueueTranscription,
   getScoreStatus,
   listScores,
 } from "./service.js";
@@ -38,8 +41,27 @@ scoresRouter.post("/", async (req, res, next) => {
 
 scoresRouter.post("/:id/uploaded", async (req, res, next) => {
   try {
-    const score = await enqueueTranscriptionForUser(req.params.id, req.user!.id);
-    res.status(202).json({ scoreId: score.id, status: "queued" });
+    const attempt = await enqueueTranscription(
+      req.params.id,
+      req.user!.id,
+      req.body?.engine,
+      req.body?.options
+    );
+    res.status(202).json({ scoreId: req.params.id, attemptId: attempt.id, status: attempt.status });
+  } catch (err) {
+    next(err);
+  }
+});
+
+scoresRouter.post("/:id/reprocess", async (req, res, next) => {
+  try {
+    const attempt = await enqueueTranscription(
+      req.params.id,
+      req.user!.id,
+      req.body?.engine,
+      req.body?.options
+    );
+    res.status(202).json({ scoreId: req.params.id, attemptId: attempt.id, status: attempt.status });
   } catch (err) {
     next(err);
   }
@@ -56,6 +78,15 @@ scoresRouter.get("/", async (req, res, next) => {
 scoresRouter.get("/:id", async (req, res, next) => {
   try {
     res.json(await getScoreStatus(req.params.id, req.user!.id));
+  } catch (err) {
+    next(err);
+  }
+});
+
+scoresRouter.delete("/:id", async (req, res, next) => {
+  try {
+    await deleteScoreForUser(req.params.id, req.user!.id);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

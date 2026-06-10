@@ -16,21 +16,59 @@ export const TRANSCRIPTION_QUEUE = "transcription";
 /** The (single) job name on that queue. */
 export const TRANSCRIBE_JOB = "transcribe";
 
+/** The OMR engine used for a run (chosen per attempt). */
+export type OmrEngine = "audiveris" | "homr";
+
+export const OMR_ENGINES: OmrEngine[] = ["audiveris", "homr"];
+
+/**
+ * Curated transcription options. These tune the Audiveris engine (the worker
+ * maps them to its CLI flags); homr has no options and ignores them. Kept small
+ * and stable since this crosses the language boundary and is stored on the
+ * attempt row.
+ */
+export interface TranscriptionOptions {
+  /** How forgiving the classifier is about image quality. */
+  inputQuality?: "synthetic" | "standard" | "poor";
+  /** Image binarization method. */
+  binarization?: "adaptive" | "global";
+  /** Threshold (0–255) used when binarization is "global". */
+  binarizationThreshold?: number;
+  /** Dominant OCR language for text/lyrics (Tesseract code, e.g. "eng"). */
+  ocrLanguage?: string;
+  /** A few common processing switches (enable recognition of these items). */
+  switches?: {
+    smallHeads?: boolean;
+    crossHeads?: boolean;
+    lyrics?: boolean;
+    articulations?: boolean;
+    implicitTuplets?: boolean;
+  };
+}
+
 /**
  * Data the API puts on a job and the worker reads off it.
  * Keep this tiny and stable — it crosses a language boundary.
  */
 export interface TranscriptionJobData {
-  /** The `scores` row id (also the user-facing handle for status). */
+  /** The `scores` row id (the uploaded source). */
   scoreId: string;
+  /** The `attempts` row id this run writes its status/outputs to. */
+  attemptId: string;
   /** The R2/MinIO object key of the uploaded image/PDF to transcribe. */
   sourceKey: string;
+  /** Which OMR engine to run. */
+  engine: OmrEngine;
+  /** The options chosen for this run (absent = engine defaults). */
+  options?: TranscriptionOptions;
 }
 
 /** What the worker returns on success (BullMQ stores it on the job). */
 export interface TranscriptionJobResult {
   /** The R2/MinIO object key of the generated MusicXML. */
   outputKey: string;
+  /** The R2/MinIO object key of the generated MIDI (absent if conversion failed). */
+  outputMidiKey?: string;
 }
 
 /**
