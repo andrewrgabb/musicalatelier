@@ -1,0 +1,169 @@
+name: CI / Prod Deploy
+
+# One pipeline: CI on every PR and on pushes to main; on main, a green CI then
+# deploys the backends (api → worker) and finally the UI (web). Deploys only the
+# apps that changed. Can also be run manually (Actions → CI / Prod Deploy → Run workflow).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app to deploy (manual runs only)
+        type: choice
+        default: all
+        options: [all, api, worker, web]
+
+# Supersede in-progress runs on a branch — but never cancel a main run mid-deploy
+# (a half-applied release is worse than waiting).
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ---- CI -------------------------------------------------------------------
+
+  # pnpm + Turbo workspaces: web, api, contracts.
+  ci-js:
+    name: CI · Web / API (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # build first — it generates the Prisma client that typecheck needs;
+      # Turbo caches it so nothing is rebuilt afterwards.
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm lint
+
+  # Python OMR worker (apps/worker), built with uv.
+  ci-worker:
+    name: CI · Worker (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Byte-compile sources
+        run: uv run python -m compileall .
+
+  # ---- Change detection (deploy gating) -------------------------------------
+
+  # Which apps changed, so we don't rebuild the heavy worker image when only the
+  # web app moved. Push only; manual runs use the workflow input instead.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/contracts/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+            web:
+              - 'apps/web/**'
+              - 'packages/contracts/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+            worker:
+              - 'apps/worker/**'
+
+  # ---- Deploy: backends first (api → worker), then the UI -------------------
+
+  # API → Fly app musicalatelier-api. The release_command in apps/api/fly.toml
+  # runs `prisma migrate deploy` before the new release goes live.
+  deploy-api:
+    name: Deploy API (Fly)
+    needs: [ci-js, ci-worker, changes]
+    runs-on: ubuntu-latest
+    if: >-
+      always()
+      && needs.ci-js.result == 'success' && needs.ci-worker.result == 'success'
+      && (
+        (github.event_name == 'push' && needs.changes.outputs.api == 'true')
+        || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","api"]'), github.event.inputs.app))
+      )
+    concurrency: { group: deploy-api, cancel-in-progress: false }
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile . --remote-only
+
+  # Worker → Fly app musicalatelier-worker. After the API so any schema migration
+  # is applied before the new worker reads rows.
+  deploy-worker:
+    name: Deploy Worker (Fly)
+    needs: [ci-js, ci-worker, changes, deploy-api]
+    runs-on: ubuntu-latest
+    if: >-
+      always()
+      && needs.ci-js.result == 'success' && needs.ci-worker.result == 'success'
+      && needs.deploy-api.result != 'failure'
+      && (
+        (github.event_name == 'push' && needs.changes.outputs.worker == 'true')
+        || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","worker"]'), github.event.inputs.app))
+      )
+    concurrency: { group: deploy-worker, cancel-in-progress: false }
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile . --remote-only
+
+  # Web SPA → Vercel project musicalatelier-web (root directory apps/web). Runs
+  # last, after the backends. `vercel build` invokes the project's pnpm build, so
+  # pnpm/node must be on the runner. Build-time env (VITE_*) comes from Vercel's
+  # Production env via `vercel pull`. Org/project IDs aren't secret (they're in
+  # .vercel/repo.json); only the token is.
+  deploy-web:
+    name: Deploy Web (Vercel)
+    needs: [ci-js, ci-worker, changes, deploy-api, deploy-worker]
+    runs-on: ubuntu-latest
+    if: >-
+      always()
+      && needs.ci-js.result == 'success' && needs.ci-worker.result == 'success'
+      && needs.deploy-api.result != 'failure' && needs.deploy-worker.result != 'failure'
+      && (
+        (github.event_name == 'push' && needs.changes.outputs.web == 'true')
+        || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","web"]'), github.event.inputs.app))
+      )
+    concurrency: { group: deploy-web, cancel-in-progress: false }
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_WRlTLh5iCoLDR3gvGsK2tCut
+      VERCEL_PROJECT_ID: prj_sivwxMtorTTgzCPHznpy6FNU9FtZ
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: npm i -g vercel@latest
+      - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: vercel build --prod --token="$VERCEL_TOKEN"
+      - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
