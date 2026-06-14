@@ -1,0 +1,68 @@
+name: CI
+
+# Runs on every pull request and on pushes to main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel an in-progress run when new commits are pushed to the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The pnpm + Turbo workspaces: web, api, and the contracts package.
+  js:
+    name: Web / API (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version is read from the "packageManager" field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # build runs first because it generates the Prisma client (api's build
+      # task), which the typecheck step depends on. Turbo caches the result so
+      # nothing is rebuilt afterwards.
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+  # The Python OMR worker (apps/worker) — built with uv, outside the JS graph.
+  worker:
+    name: Worker (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Resolves and installs against the committed uv.lock, catching any
+      # lockfile drift or unresolvable dependency.
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # No tests or linter configured yet; byte-compile every module so syntax
+      # errors fail the build.
+      - name: Byte-compile sources
+        run: uv run python -m compileall .

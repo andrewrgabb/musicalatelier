@@ -1,0 +1,145 @@
+name: CD
+
+# Deploys to production after CI succeeds on main. The workflow_run trigger
+# fires when the "CI" workflow finishes; the jobs below only proceed if it
+# passed. Can also be run manually (Actions tab → CD → Run workflow) to force a
+# deploy of a specific app or all of them, bypassing the CI gate.
+#
+# Note: workflow_run only fires for CI runs of the version of this file already
+# on main, so the gate starts working from the first push *after* this lands.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app to deploy
+        type: choice
+        default: all
+        options: [all, api, worker, web]
+
+# One production deploy at a time. Don't cancel an in-flight deploy — a half-
+# applied release (e.g. an interrupted prisma migrate) is worse than waiting.
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  # Figure out which apps changed so we don't rebuild the heavy worker image
+  # when only the web app moved. Only runs for a *successful* CI run; manual
+  # dispatch skips this and lets the input decide instead.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The exact commit CI tested, not whatever main's tip is now.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - id: filter
+        name: Diff against parent commit
+        run: |
+          changed=$(git diff --name-only HEAD^ HEAD)
+          echo "Changed files:"; echo "$changed"
+          api=false; web=false; worker=false
+          if echo "$changed" | grep -qE '^(apps/api/|packages/contracts/|pnpm-lock\.yaml|package\.json)'; then api=true; fi
+          if echo "$changed" | grep -qE '^(apps/web/|packages/contracts/|pnpm-lock\.yaml|package\.json)'; then web=true; fi
+          if echo "$changed" | grep -qE '^apps/worker/'; then worker=true; fi
+          { echo "api=$api"; echo "web=$web"; echo "worker=$worker"; } >> "$GITHUB_OUTPUT"
+
+  # API → Fly app musicalatelier-api. The [deploy] release_command in
+  # apps/api/fly.toml runs `prisma migrate deploy` before the new release goes live.
+  deploy-api:
+    name: Deploy API (Fly)
+    needs: changes
+    runs-on: ubuntu-latest
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_run' && needs.changes.outputs.api == 'true') ||
+        (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","api"]'), github.event.inputs.app))
+      )
+    concurrency:
+      group: cd-api
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        run: flyctl deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile . --remote-only
+
+  # Worker → Fly app musicalatelier-worker (no public service, polls the queue).
+  # Runs after the API so any schema migration is applied before the new worker
+  # starts reading rows. On worker-only changes the API job is skipped and this
+  # proceeds immediately.
+  deploy-worker:
+    name: Deploy Worker (Fly)
+    needs: [changes, deploy-api]
+    runs-on: ubuntu-latest
+    if: >-
+      always() &&
+      needs.deploy-api.result != 'failure' &&
+      (
+        (github.event_name == 'workflow_run' && needs.changes.outputs.worker == 'true') ||
+        (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","worker"]'), github.event.inputs.app))
+      )
+    concurrency:
+      group: cd-worker
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        run: flyctl deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile . --remote-only
+
+  # Web SPA → Vercel project musicalatelier-web (root directory apps/web).
+  # Build-time env (VITE_API_URL, VITE_CLERK_PUBLISHABLE_KEY) lives in Vercel's
+  # Production env and is pulled by `vercel pull`. Org/project IDs are not secret
+  # (they're committed in .vercel/repo.json); only the token is.
+  deploy-web:
+    name: Deploy Web (Vercel)
+    needs: changes
+    runs-on: ubuntu-latest
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_run' && needs.changes.outputs.web == 'true') ||
+        (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","web"]'), github.event.inputs.app))
+      )
+    concurrency:
+      group: cd-web
+      cancel-in-progress: false
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_WRlTLh5iCoLDR3gvGsK2tCut
+      VERCEL_PROJECT_ID: prj_sivwxMtorTTgzCPHznpy6FNU9FtZ
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
